@@ -1,0 +1,2087 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="cordova.js"></script>
+<script src="cordova_plugins.js"></script>
+<script src="web-bluetooth-shim.js"></script>
+
+    <meta charset="UTF-8">
+    <title>Maqueen Lab</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#0a1628">
+    <meta name="description" content="BLE component lab for the DFRobot Maqueen Lite v4 — every actuator and sensor, live in your browser">
+    <meta name="mobile-web-app-capable" content="yes">
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" href="assets/logo.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        /* Maqueen Lab: single-mode UI — drop bit-playground's beginner/expert split */
+        .beginner-only { display: none !important; }
+    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Aref+Ruqaa:wght@700&display=swap" rel="stylesheet">
+    <!-- Chart.js: for full offline support, download and serve locally -->
+    <!-- e.g. <script src="chart.min.js"></script> -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="js/lang.js" defer></script>
+    <!-- Modular scripts (load order matters) -->
+    <script src="js/core.js" defer></script>
+    <script src="js/ble.js" defer></script>
+    <script src="js/sensors.js" defer></script>
+    <script src="js/controls.js" defer></script>
+    <script src="js/servos.js" defer></script>
+    <script src="js/others.js" defer></script>
+    <script src="js/graph.js" defer></script>
+    <script src="js/models/microbit.js" defer></script>
+    <script src="js/board3d.js" defer></script>
+    <!-- Maqueen-specific layer (wraps ble.js without modifying it) -->
+    <script src="js/ble-scheduler.js" defer></script>
+    <script src="js/maqueen-panel.js" defer></script>
+    <script src="js/maqueen-tab.js" defer></script>
+<style>
+.lang-picker { display: flex; gap: 2px; }
+.lang-picker .lang-btn { border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 0.7rem; font-weight: 600; background: transparent; color: inherit; opacity: 0.5; }
+.lang-picker .lang-btn.active { opacity: 1; background: var(--accent, #22c55e); color: #fff; }
+html[dir="rtl"] .step-num { margin-right: 0; margin-left: 8px; }
+html[dir="rtl"] .hint ol { padding-left: 0; padding-right: 20px; }
+</style>
+</head>
+<body>
+<!-- Compatibility banner: Web Bluetooth is only on Chromium-based browsers (Chrome/Edge/Opera).
+     Shows once on Safari/Firefox/iOS, dismissable, persists via localStorage. -->
+<style>
+  #compat-banner { position: fixed; top: 0; left: 0; right: 0; z-index: 9999;
+    background: linear-gradient(90deg, #fbbf24, #f59e0b); color: #020617;
+    padding: 14px 22px; display: none; align-items: center; gap: 14px;
+    font-family: system-ui, -apple-system, sans-serif; font-weight: 600;
+    box-shadow: 0 4px 18px rgba(0,0,0,.3); font-size: 0.95rem; }
+  #compat-banner .c-ic { font-size: 1.5rem; }
+  #compat-banner .c-msg { flex: 1; line-height: 1.35; }
+  #compat-banner .c-msg strong { font-weight: 900; }
+  #compat-banner .c-msg a { color: #020617; text-decoration: underline; }
+  #compat-banner button { background: #020617; color: #fbbf24; border: none;
+    padding: 8px 16px; border-radius: 6px; font-weight: 700; cursor: pointer;
+    font-family: inherit; font-size: 0.9rem; }
+  #compat-banner button:hover { background: #1e293b; }
+  @media (max-width: 600px) { #compat-banner { flex-wrap: wrap; font-size: 0.85rem; } #compat-banner .c-msg { flex-basis: 100%; } }
+</style>
+<div id="compat-banner" role="alert">
+  <span class="c-ic">⚠️</span>
+  <div class="c-msg">
+    <strong>Your browser doesn't support Web Bluetooth.</strong>
+    Maqueen Lab needs <strong>Chrome</strong>, <strong>Edge</strong>, or <strong>Opera</strong> on desktop / Android.
+    It will <strong>not</strong> connect to a micro:bit on Safari, Firefox, iPhone, or iPad.
+  </div>
+  <button onclick="this.parentElement.style.display='none';try{localStorage.setItem('compatBannerDismissed','1')}catch{}">Got it</button>
+</div>
+<script>
+(function(){
+  try {
+    var ok = ('bluetooth' in navigator) && typeof navigator.bluetooth.requestDevice === 'function';
+    if (!ok && localStorage.getItem('compatBannerDismissed') !== '1') {
+      var b = document.getElementById('compat-banner');
+      if (b) b.style.display = 'flex';
+    }
+    // Chromebook positive signal — big trust win for school buyers.
+    var isCrOS = /CrOS/i.test(navigator.userAgent || '');
+    if (ok && isCrOS && localStorage.getItem('chromebookBadgeSeen') !== '1') {
+      setTimeout(function(){
+        var bar = document.createElement('div');
+        bar.style.cssText = 'position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:9998;background:linear-gradient(90deg,#22c55e,#16a34a);color:#020617;padding:12px 22px;border-radius:30px;font:600 0.9rem system-ui,sans-serif;box-shadow:0 10px 30px rgba(0,0,0,.35);cursor:pointer';
+        bar.innerHTML = '✅ <strong>Chromebook detected</strong> — you\'re good to go.';
+        bar.title = 'Click to dismiss';
+        bar.onclick = function(){ bar.remove(); try{localStorage.setItem('chromebookBadgeSeen','1');}catch{} };
+        document.body.appendChild(bar);
+        setTimeout(function(){ if (bar.isConnected) bar.style.opacity='0.35'; }, 5000);
+      }, 1200);
+    }
+  } catch(e) {}
+})();
+</script>
+<div class="app">
+    <!-- Header -->
+<div class="header">
+    <div style="width:100%; text-align:center; padding:4px 0 6px; font-family:'Aref Ruqaa',serif; font-size:1.15rem; font-weight:700; color:#5d7a94; opacity:0.55; direction:rtl; letter-spacing:1px;">✦ بسم الله الرَّحمٰن الرَّحيم ✦</div>
+    <div class="title-block">
+        <img src="assets/logo.svg" alt="Maqueen Lab Logo" class="site-logo animated-logo">
+        <h1 data-i18n="app_title">Maqueen Lab</h1>
+        <div class="subtitle"><span data-i18n="app_subtitle">Play • Learn • Create</span> <span style="opacity:0.4; font-size:0.75em;">v0.1.0</span></div>
+    </div>
+    <div class="theme-picker" aria-label="Theme selector">
+        <button class="theme-btn active" data-theme="stealth" title="Stealth">🌙</button>
+        <button class="theme-btn" data-theme="neon" title="Neon">⚡</button>
+        <button class="theme-btn" data-theme="arctic" title="Arctic">☁️</button>
+        <button class="theme-btn" data-theme="blaze" title="Blaze">🔥</button>
+    </div>
+    <div style="width:1px; height:24px; background:var(--card-border, rgba(148,163,184,0.3)); margin:0 4px;"></div>
+    <div class="lang-picker" aria-label="Language selector">
+        <button class="lang-btn" data-lang="en" title="English"><svg width="24" height="16" viewBox="0 0 60 40"><rect width="60" height="40" fill="#012169"/><path d="M0 0L60 40M60 0L0 40" stroke="#fff" stroke-width="6.5"/><path d="M0 0L60 40M60 0L0 40" stroke="#C8102E" stroke-width="3.5"/><path d="M30 0V40M0 20H60" stroke="#fff" stroke-width="11"/><path d="M30 0V40M0 20H60" stroke="#C8102E" stroke-width="6.5"/></svg></button>
+        <button class="lang-btn" data-lang="fr" title="Français"><svg width="24" height="16" viewBox="0 0 60 40"><rect width="20" height="40" fill="#002395"/><rect x="20" width="20" height="40" fill="#fff"/><rect x="40" width="20" height="40" fill="#ED2939"/></svg></button>
+        <button class="lang-btn" data-lang="ar" title="العربية"><svg width="24" height="16" viewBox="0 0 900 600"><defs><clipPath id="gl"><rect width="450" height="600"/></clipPath></defs><rect width="450" height="600" fill="#006233"/><rect x="450" width="450" height="600" fill="#FFF"/><g fill="#D21034" transform="translate(450,300)"><circle r="125"/><circle cx="25" r="100" fill="#FFF"/><g clip-path="url(#gl)" transform="translate(-450,-300)"><circle cx="475" cy="300" r="100" fill="#006233"/></g><path d="M85-12l22 67h71l-57 42 22 67-58-42-57 42 21-67-57-42h71z"/></g></svg></button>
+    </div>
+    <div style="width:1px; height:24px; background:var(--card-border, rgba(148,163,184,0.3)); margin:0 4px;"></div>
+    <div style="display:flex; gap:2px; align-items:center;">
+        <a href="lab.html" title="Component Lab (Servo Explorer pilot)" style="text-decoration:none; font-size:1rem; opacity:0.6; padding:2px 4px;">🧪</a>
+        <a href="schematics-kids.html" title="Meet your robot! (kid-friendly)" style="text-decoration:none; font-size:1rem; opacity:0.6; padding:2px 4px;">🤖</a>
+        <a href="schematics.html" title="Engineer schematic" style="text-decoration:none; font-size:1rem; opacity:0.6; padding:2px 4px;">📐</a>
+        <a href="pinout.html" title="Pinout reference" style="text-decoration:none; font-size:1rem; opacity:0.6; padding:2px 4px;">📌</a>
+        <a href="USER_GUIDE.html" title="User Guide" style="text-decoration:none; font-size:1rem; opacity:0.6; padding:2px 4px;">📖</a>
+        <button id="clearCacheBtn" title="Reset" style="border:none; background:none; cursor:pointer; font-size:1rem; opacity:0.5; padding:2px 4px;">🗑️</button>
+    </div>
+    <div style="width:1px; height:24px; background:var(--card-border, rgba(148,163,184,0.3)); margin:0 4px;"></div>
+    <div class="chip" role="status" aria-live="polite" aria-atomic="true">
+        <div class="chip-dot"></div>
+        <span data-i18n="ready">Ready!</span>
+    </div>
+</div>
+
+    <!-- ===== Maqueen Lite v4 live sensor strip (new firmware verbs) ===== -->
+    <div id="maqueen-panel" style="display:flex; gap:14px; padding:10px 16px; margin:0 0 12px; background:linear-gradient(90deg, rgba(0,212,255,0.08), rgba(244,114,182,0.06)); border:1px solid rgba(0,212,255,0.25); border-radius:12px; flex-wrap:wrap; align-items:center; font-family:'JetBrains Mono', monospace; font-size:13px;">
+      <div style="font-weight:700; color:#00d4ff; padding-right:8px; border-right:1px solid rgba(255,255,255,0.1);">🤖 Maqueen Lite v4</div>
+
+      <!-- Line sensors -->
+      <div title="Line sensors L | R (P13 | P14)" style="display:flex; align-items:center; gap:6px;">
+        <span style="color:#93a8c4; font-size:11px;">LINE</span>
+        <span id="mq-line-l" class="mq-dot" style="display:inline-block; width:14px; height:14px; border-radius:50%; background:#1d3556; border:1px solid #4ade80;"></span>
+        <span id="mq-line-r" class="mq-dot" style="display:inline-block; width:14px; height:14px; border-radius:50%; background:#1d3556; border:1px solid #4ade80;"></span>
+      </div>
+
+      <!-- Ultrasonic distance -->
+      <div title="Ultrasonic SR04 (P1 trig / P2 echo)" style="display:flex; align-items:center; gap:6px;">
+        <span style="color:#93a8c4; font-size:11px;">DIST</span>
+        <span id="mq-dist" style="color:#4ade80; font-weight:700; min-width:50px; text-align:right;">— cm</span>
+      </div>
+
+      <!-- IR remote -->
+      <div title="IR remote (NEC)" style="display:flex; align-items:center; gap:6px;">
+        <span style="color:#93a8c4; font-size:11px;">IR</span>
+        <span id="mq-ir" style="color:#c084fc; font-weight:700; min-width:42px; text-align:right;">—</span>
+      </div>
+
+      <!-- Accelerometer (also via new firmware) -->
+      <div title="Accelerometer x, y, z (mg)" style="display:flex; align-items:center; gap:6px;">
+        <span style="color:#93a8c4; font-size:11px;">ACC</span>
+        <span id="mq-acc" style="color:#fbbf24; font-weight:700; min-width:120px; text-align:right;">—, —, —</span>
+      </div>
+
+      <!-- BLE scheduler bench (sent / echoed / lost / latency) -->
+      <div title="BLE round-trip stats" style="display:flex; align-items:center; gap:6px; margin-left:auto; padding-left:12px; border-left:1px solid rgba(255,255,255,0.1);">
+        <span style="color:#93a8c4; font-size:11px;">BLE</span>
+        <span id="mq-bench" style="color:#00d4ff;">0 / 0 · — ms</span>
+      </div>
+
+      <!-- Polling controls -->
+      <div style="display:flex; gap:6px; margin-left:8px;">
+        <button id="mq-poll-line" style="background:#0a1628; color:#4ade80; border:1px solid #4ade80; border-radius:6px; padding:4px 10px; font-family:inherit; font-size:11px; cursor:pointer;">poll LINE</button>
+        <button id="mq-poll-dist" style="background:#0a1628; color:#4ade80; border:1px solid #4ade80; border-radius:6px; padding:4px 10px; font-family:inherit; font-size:11px; cursor:pointer;">poll DIST</button>
+        <button id="mq-poll-ir" style="background:#0a1628; color:#c084fc; border:1px solid #c084fc; border-radius:6px; padding:4px 10px; font-family:inherit; font-size:11px; cursor:pointer;">poll IR</button>
+        <button id="mq-streams-toggle" title="Enable ACC/TEMP/LIGHT/COMPASS/BTN streams (needed for Sensors / Graph / 3D tabs)" style="background:#0a1628; color:#fbbf24; border:1px solid #fbbf24; border-radius:6px; padding:4px 10px; font-family:inherit; font-size:11px; cursor:pointer;">streams: OFF</button>
+      </div>
+    </div>
+
+    <div class="rows-container" style="display:flex; flex-direction:column; gap:16px;">
+        <!-- ROW 1: Live link + Message log -->
+        <div class="row row-top" style="display:flex; gap:20px;">
+            <!-- LEFT: Connection -->
+            <div class="col-left">
+                <div class="card connection-card">
+                    <div class="card-header">
+                        <div>
+                            <div class="card-title">
+                                <span class="icon">📡</span>
+                                <span data-i18n="connect_title">Connect</span>
+                            </div>
+                            <div class="card-subtitle expert-only">
+                                Bluetooth connection to your micro:bit
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="connection-grid">
+                        <div class="connection-main">
+                            <div class="connection-status-block">
+                                <div class="status-row">
+                                    <div id="connectionStatus" class="status-pill">
+                                        <span class="status-dot"></span>
+                                        <span data-i18n="ready_to_connect">Ready to connect</span>
+                                    </div>
+                                </div>
+
+                                <div class="button-row">
+                                    <button id="connectBtn" class="primary" aria-label="Connect to micro:bit">
+                                        <span class="btn-icon">🔗</span>
+                                        <span data-i18n="connect_btn">Connect</span>
+                                    </button>
+                                    <button id="disconnectBtn" class="secondary" disabled aria-label="Disconnect micro:bit">
+                                        <span class="btn-icon">✕</span>
+                                        <span data-i18n="disconnect_btn">Disconnect</span>
+                                    </button>
+                                </div>
+
+                                <div class="hint" id="appBuildInfo" style="font-family:'JetBrains Mono', monospace; font-size:12px; line-height:1.7;">
+                                    <div style="font-weight:700; color:#00d4ff; font-size:13px;">🤖 Maqueen Lab</div>
+                                    <div style="opacity:0.7;">version <span style="color:#00d4ff;" id="appVersion">0.1.0</span></div>
+                                    <div style="opacity:0.7;">built <span style="color:#00d4ff;" id="appBuildDate">2026-04-26</span></div>
+                                    <div style="opacity:0.55; margin-top:4px;">commit <span style="color:#00d4ff;" id="appCommit">main</span></div>
+                                    <div id="fwVersionLine" style="opacity:0.7; margin-top:6px; padding-top:6px; border-top:1px solid rgba(255,255,255,0.06);">
+                                      firmware <span id="fwVersion" style="color:#93a8c4;">— (connect to detect)</span>
+                                      <span id="fwVersionBadge" style="display:none; font-size:10px; padding:1px 6px; border-radius:4px; margin-left:4px;"></span>
+                                    </div>
+                                </div>
+                                <script>
+                                  // App build/commit/version
+                                  let expectedFwVersion = null;
+                                  fetch('product.json').then(r => r.json()).then(j => {
+                                    const v = document.getElementById('appVersion');
+                                    if (v && j.VERSION_PLAIN) v.textContent = j.VERSION_PLAIN;
+                                    expectedFwVersion = j.VERSION_PLAIN || null;
+                                  }).catch(()=>{});
+                                  fetch('build-info.json').then(r => r.json()).then(b => {
+                                    const d = document.getElementById('appBuildDate');
+                                    const c = document.getElementById('appCommit');
+                                    if (d && b.builtAt) d.textContent = b.builtAt;
+                                    if (c && b.commit) c.textContent = b.commit;
+                                    if (b.version) expectedFwVersion = b.version;
+                                  }).catch(()=>{});
+
+                                  // Listen for HELLO:<ver> reply from firmware on connect.
+                                  // Compare to expectedFwVersion (the version embedded in this app build)
+                                  // and flag if outdated/newer. Also pop a toast on first detection.
+                                  let fwDetectedNotified = false;
+                                  function checkFw(fwVer) {
+                                    const el = document.getElementById('fwVersion');
+                                    const badge = document.getElementById('fwVersionBadge');
+                                    if (!el) return;
+                                    el.textContent = 'v' + fwVer;
+                                    if (!expectedFwVersion) { el.style.color = '#00d4ff'; return; }
+                                    const cmp = compareVer(fwVer, expectedFwVersion);
+                                    if (cmp === 0) {
+                                      el.style.color = '#4ade80';
+                                      badge.textContent = '✓ up to date';
+                                      badge.style.background = 'rgba(74,222,128,0.15)';
+                                      badge.style.color = '#4ade80';
+                                      badge.style.border = '1px solid rgba(74,222,128,0.4)';
+                                      badge.style.display = 'inline-block';
+                                    } else if (cmp < 0) {
+                                      el.style.color = '#fbbf24';
+                                      badge.textContent = '⚠ outdated · expected v' + expectedFwVersion;
+                                      badge.style.background = 'rgba(251,191,36,0.15)';
+                                      badge.style.color = '#fbbf24';
+                                      badge.style.border = '1px solid rgba(251,191,36,0.4)';
+                                      badge.style.display = 'inline-block';
+                                      if (!fwDetectedNotified && typeof showToast === 'function') {
+                                        showToast('Firmware v' + fwVer + ' is outdated. Open 🤖 Firmware → Copy Code → re-flash for v' + expectedFwVersion + '.', 'warning');
+                                      }
+                                      fwDetectedNotified = true;
+                                    } else {
+                                      el.style.color = '#c084fc';
+                                      badge.textContent = '✨ newer than app (v' + expectedFwVersion + ')';
+                                      badge.style.background = 'rgba(192,132,252,0.15)';
+                                      badge.style.color = '#c084fc';
+                                      badge.style.border = '1px solid rgba(192,132,252,0.4)';
+                                      badge.style.display = 'inline-block';
+                                    }
+                                  }
+                                  // numeric semver compare: -1 if a<b, 0 if equal, 1 if a>b
+                                  function compareVer(a, b) {
+                                    const pa = String(a).split('.').map(n => parseInt(n) || 0);
+                                    const pb = String(b).split('.').map(n => parseInt(n) || 0);
+                                    for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+                                      const x = pa[i] || 0, y = pb[i] || 0;
+                                      if (x < y) return -1;
+                                      if (x > y) return 1;
+                                    }
+                                    return 0;
+                                  }
+                                  // Hook into the BLE scheduler's reply event for HELLO lines.
+                                  function attachFwListener() {
+                                    if (!window.bleScheduler) { setTimeout(attachFwListener, 200); return; }
+                                    window.bleScheduler.on('reply', ({line}) => {
+                                      const m = line && line.match(/^HELLO:(.+)$/);
+                                      if (m) checkFw(m[1].trim());
+                                    });
+                                    // Reset state on disconnect so next connection re-detects
+                                    window.bleScheduler.on('disconnected', () => {
+                                      const el = document.getElementById('fwVersion');
+                                      const badge = document.getElementById('fwVersionBadge');
+                                      if (el) { el.textContent = '— (connect to detect)'; el.style.color = '#93a8c4'; }
+                                      if (badge) badge.style.display = 'none';
+                                      fwDetectedNotified = false;
+                                    });
+                                  }
+                                  attachFwListener();
+                                </script>
+                            </div>
+
+                            <div class="connection-details">
+                                <div class="device-row expert-only">
+                                    <span class="device-label" data-i18n="name_label">Name</span>
+                                    <span id="deviceName" class="device-value" data-i18n="none">None</span>
+                                </div>
+
+                                <!-- Hidden technical info -->
+                                <div id="serialNumber" style="display:none;"></div>
+                                <code id="serviceUuidDisplay" style="display:none;"></code>
+                                <code id="rxCharUuidDisplay" style="display:none;"></code>
+                                <code id="txCharUuidDisplay" style="display:none;"></code>
+                            </div>
+                        </div>
+
+                        <div class="connection-footer">
+                            <button id="firmwareBtn" class="secondary small" style="width:100%;">
+                                <span>🤖</span> <span data-i18n="firmware_btn">Firmware</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- RIGHT: Message log / Activity -->
+            <div class="col-right">
+                <!-- Simple Activity for Beginners -->
+                <div class="card activity-card beginner-only">
+                    <div class="card-header">
+                        <div>
+                            <div class="card-title">
+                                <span class="icon">⚡</span>
+                                <span data-i18n="activity_title">Activity</span>
+                            </div>
+                        </div>
+                        <button id="clearActivityBtn" class="secondary small" data-i18n="clear">Clear</button>
+                    </div>
+                    <div id="activity" class="activity-feed" aria-live="polite"></div>
+                </div>
+
+                <!-- Technical Log for Experts -->
+                <div class="card log-card expert-only">
+                    <div class="card-header">
+                        <div>
+                            <div class="card-title">
+                                <span class="icon">📜</span>
+                                <span data-i18n="message_log">Message Log</span>
+                            </div>
+                            <div class="card-subtitle">
+                                Raw UART messages
+                            </div>
+                        </div>
+                        <div class="log-controls">
+                            <button id="clearLogBtn" class="secondary small" aria-label="Clear log" data-i18n="clear">Clear</button>
+                            <button id="exportLogBtn" class="small" aria-label="Export log">
+                                <span class="btn-icon">⬇</span>
+                                <span data-i18n="export">Export</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="log" class="log" aria-live="polite" role="log"></div>
+
+                    <div class="log-footer">
+                        <div class="badge">
+                            micro:bit ⇄ Playground
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ROW 2: Tabs -->
+        <div class="row row-bottom" style="display:flex; gap:20px; align-items:flex-start; width:100%;">
+            <div class="col-left">
+                <!-- Tab bar — Maqueen-first, generic micro:bit tabs grouped under Playground -->
+                <div class="mode-selector-container">
+                    <div class="mode-selector" style="display:flex; width:100%; gap:6px;">
+                        <button
+                            id="maqueenTabBtn"
+                            class="mode-btn tab-btn active"
+                            data-page="maqueen"
+                            style="flex:2;">
+                            <span class="mode-icon">🤖</span>
+                            <span data-i18n="tab_maqueen">Maqueen</span>
+                        </button>
+                        <button
+                            id="playgroundToggleBtn"
+                            type="button"
+                            class="mode-btn"
+                            title="Generic micro:bit tools (Controls, Sensors, Graph, 3D, Bench, GamePad, More)"
+                            aria-expanded="false"
+                            style="flex:1;">
+                            <span class="mode-icon">🧪</span>
+                            <span>Playground</span>
+                            <span id="playgroundToggleArrow" style="margin-left:6px; transition:transform 0.15s; display:inline-block;">▾</span>
+                        </button>
+                    </div>
+                    <!-- Sub-row of legacy bit-playground tabs. Hidden by default; toggled by the Playground button. -->
+                    <div id="playgroundTabRow" class="mode-selector" style="display:none; width:100%; margin-top:6px; gap:4px; flex-wrap:wrap;">
+                        <button
+                            id="controlsTabBtn"
+                            class="mode-btn tab-btn"
+                            data-page="controls"
+                            style="flex:1;">
+                            <span class="mode-icon">🎛️</span>
+                            <span data-i18n="tab_controls">Controls</span>
+                        </button>
+                        <button
+                            id="sensesTabBtn"
+                            class="mode-btn tab-btn"
+                            data-page="senses"
+                            style="flex:1;">
+                            <span class="mode-icon">👀</span>
+                            <span data-i18n="tab_sensors">Sensors</span>
+                        </button>
+                        <button
+                            id="graphTabBtn"
+                            class="mode-btn tab-btn"
+                            data-page="graph"
+                            style="flex:1;">
+                            <span class="mode-icon">📈</span>
+                            <span data-i18n="tab_graph">Graph</span>
+                        </button>
+                        <button
+                            id="board3dTabBtn"
+                            class="mode-btn tab-btn"
+                            data-page="board3d"
+                            style="flex:1;">
+                            <span class="mode-icon">🎲</span>
+                            <span data-i18n="tab_3d">3D</span>
+                        </button>
+                        <button
+                            id="benchTabBtn"
+                            class="mode-btn tab-btn expert-only"
+                            data-page="bench"
+                            style="flex:1;">
+                            <span class="mode-icon">🔧</span>
+                            <span data-i18n="tab_bench">Bench</span>
+                        </button>
+                        <button
+                            id="othersTabBtn"
+                            class="mode-btn tab-btn"
+                            data-page="others"
+                            style="flex:1;">
+                            <span class="mode-icon">✨</span>
+                            <span data-i18n="tab_more">More</span>
+                        </button>
+                    </div>
+                </div>
+                <script>
+                  // ---- Playground group toggle ----
+                  // Single source of truth: open if active tab is in the legacy set,
+                  // closed when user is on the Maqueen tab.
+                  (function () {
+                    const LEGACY = ['controls','senses','graph','board3d','bench','others'];
+                    const toggleBtn = document.getElementById('playgroundToggleBtn');
+                    const subRow    = document.getElementById('playgroundTabRow');
+                    const arrow     = document.getElementById('playgroundToggleArrow');
+                    if (!toggleBtn || !subRow) return;
+                    function setOpen(open) {
+                      subRow.style.display = open ? 'flex' : 'none';
+                      toggleBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+                      if (arrow) arrow.style.transform = open ? 'rotate(180deg)' : 'rotate(0)';
+                    }
+                    function syncFromActive() {
+                      const active = document.querySelector('.tab-btn.active');
+                      const page = active ? active.getAttribute('data-page') : 'maqueen';
+                      const inLegacy = LEGACY.indexOf(page) !== -1;
+                      setOpen(inLegacy);
+                      // visually mark the Playground button as "active group" when inside it
+                      toggleBtn.classList.toggle('active', inLegacy);
+                    }
+                    // Last-visited Playground sub-tab — restored on next open.
+                    let lastPlaygroundPage = (function () {
+                      try { return localStorage.getItem('maqueen.lastPlaygroundTab') || 'controls'; }
+                      catch { return 'controls'; }
+                    })();
+                    document.querySelectorAll('#playgroundTabRow .tab-btn').forEach(btn => {
+                      btn.addEventListener('click', () => {
+                        lastPlaygroundPage = btn.getAttribute('data-page');
+                        try { localStorage.setItem('maqueen.lastPlaygroundTab', lastPlaygroundPage); } catch {}
+                      });
+                    });
+                    toggleBtn.addEventListener('click', () => {
+                      const isOpen = subRow.style.display !== 'none';
+                      const onMaqueen = (function () {
+                        const a = document.querySelector('.tab-btn.active');
+                        return !a || a.getAttribute('data-page') === 'maqueen';
+                      })();
+                      if (!isOpen || onMaqueen) {
+                        // Open the row AND activate the last-visited sub-tab so
+                        // the visible content actually changes (otherwise users
+                        // see the row open but Maqueen content still showing).
+                        const target = document.querySelector(
+                          '#playgroundTabRow .tab-btn[data-page="' + lastPlaygroundPage + '"]'
+                        ) || document.querySelector('#playgroundTabRow .tab-btn');
+                        if (target) target.click();
+                        else setOpen(true);
+                      } else {
+                        // Already inside Playground — collapse and bounce back to Maqueen.
+                        const maq = document.querySelector('.tab-btn[data-page="maqueen"]');
+                        if (maq) maq.click();
+                        else setOpen(false);
+                      }
+                    });
+                    // Re-sync after every tab click (bit-playground sets .active on click)
+                    document.querySelectorAll('.tab-btn').forEach(btn => {
+                      btn.addEventListener('click', () => setTimeout(syncFromActive, 0));
+                    });
+                    // Initial state
+                    if (document.readyState === 'loading') {
+                      document.addEventListener('DOMContentLoaded', syncFromActive);
+                    } else {
+                      syncFromActive();
+                    }
+                  })();
+                </script>
+
+                <div class="tab-pages">
+                    <!-- ============================================ -->
+                    <!-- MAQUEEN PAGE — Drive + Servos + Lights + Buzz -->
+                    <!-- ============================================ -->
+                    <div class="tab-page active" data-page="maqueen">
+                        <div class="card">
+                            <div class="card-header">
+                                <div>
+                                    <div class="card-title"><span class="icon">🤖</span> Maqueen Lite v4</div>
+                                    <div class="card-subtitle expert-only">Native controls — uses the Maqueen firmware verbs (M:, SRV:, LED:, RGB:, BUZZ:)</div>
+                                </div>
+                                <select id="mqKitPicker" style="background:#0a1628; color:#00d4ff; border:1px solid #00d4ff; border-radius:6px; padding:6px 12px; font-family:'JetBrains Mono', monospace; font-size:12px;">
+                                    <option value="base">Base (no kit)</option>
+                                    <option value="forklift">🍴 Forklift (ROB0156-F)</option>
+                                    <option value="loader">🚜 Loader (ROB0156-L)</option>
+                                    <option value="beetle">🪲 Beetle gripper (ROB0156-B)</option>
+                                    <option value="push">🛻 Push / bulldozer (ROB0156-P)</option>
+                                </select>
+                            </div>
+
+                            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:18px; padding:16px;">
+
+                                <!-- DRIVE -->
+                                <div style="background:rgba(251,146,60,0.05); border:1px solid rgba(251,146,60,0.3); border-radius:10px; padding:14px;">
+                                    <div style="font-weight:700; color:#fb923c; margin-bottom:10px; display:flex; align-items:center; gap:8px;"><span style="font-size:18px;">🛞</span> Drive</div>
+                                    <div style="display:flex; gap:6px; justify-content:center; margin-bottom:10px;">
+                                        <button class="mq-drive-btn" data-l="200" data-r="200" style="width:60px; height:48px; background:#0a1628; color:#fb923c; border:1px solid #fb923c; border-radius:8px; font-size:18px; cursor:pointer;">↑</button>
+                                    </div>
+                                    <div style="display:flex; gap:6px; justify-content:center; margin-bottom:10px;">
+                                        <button class="mq-drive-btn" data-l="-150" data-r="150" style="width:60px; height:48px; background:#0a1628; color:#fb923c; border:1px solid #fb923c; border-radius:8px; font-size:18px; cursor:pointer;">↺</button>
+                                        <button class="mq-drive-btn" data-l="0" data-r="0" data-stop="1" style="width:60px; height:48px; background:#0a1628; color:#f87171; border:1px solid #f87171; border-radius:8px; font-size:14px; font-weight:700; cursor:pointer;">STOP</button>
+                                        <button class="mq-drive-btn" data-l="150" data-r="-150" style="width:60px; height:48px; background:#0a1628; color:#fb923c; border:1px solid #fb923c; border-radius:8px; font-size:18px; cursor:pointer;">↻</button>
+                                    </div>
+                                    <div style="display:flex; gap:6px; justify-content:center; margin-bottom:14px;">
+                                        <button class="mq-drive-btn" data-l="-200" data-r="-200" style="width:60px; height:48px; background:#0a1628; color:#fb923c; border:1px solid #fb923c; border-radius:8px; font-size:18px; cursor:pointer;">↓</button>
+                                    </div>
+                                    <div style="display:flex; align-items:center; gap:8px; font-size:11px; color:#93a8c4;">
+                                        <span>Speed</span>
+                                        <input type="range" id="mqSpeedSlider" min="50" max="255" value="200" style="flex:1; accent-color:#fb923c;"/>
+                                        <span id="mqSpeedReadout" style="font-family:monospace; color:#fb923c; min-width:30px; text-align:right;">200</span>
+                                    </div>
+                                    <div id="mqDriveLast" style="margin-top:8px; padding:6px 10px; background:#0a1628; border:1px solid #1d3556; border-radius:6px; font-family:'JetBrains Mono', monospace; font-size:11px; color:#93a8c4; text-align:center;">
+                                        last cmd: <span id="mqDriveLastVerb" style="color:#fb923c; font-weight:700;">—</span>
+                                    </div>
+                                    <label style="display:flex; align-items:center; gap:6px; margin-top:8px; font-size:11px; color:#93a8c4; cursor:pointer;" title="Hold an arrow to drive, release to stop. Off = click to set, click STOP to brake.">
+                                        <input type="checkbox" id="mqHoldToDrive" style="accent-color:#fb923c;">
+                                        hold to drive (release = stop)
+                                    </label>
+                                </div>
+
+                                <!-- SERVOS -->
+                                <div id="mqServosCard" style="background:rgba(0,212,255,0.05); border:1px solid rgba(0,212,255,0.3); border-radius:10px; padding:14px;">
+                                    <div style="font-weight:700; color:#00d4ff; margin-bottom:10px; display:flex; align-items:center; gap:8px;"><span style="font-size:18px;">🦾</span> Servos <span id="mqServosKitName" style="color:#93a8c4; font-size:11px; font-weight:400;">(generic)</span></div>
+                                    <div style="display:flex; align-items:center; gap:8px; margin-bottom:24px;">
+                                        <span id="mqS1Label" style="font-family:monospace; color:#93a8c4; min-width:40px;">S1</span>
+                                        <input type="range" id="mqS1Slider" min="0" max="180" value="90" style="flex:1; accent-color:#00d4ff;"/>
+                                        <span id="mqS1Readout" style="font-family:monospace; color:#00d4ff; min-width:38px; text-align:right;">90°</span>
+                                    </div>
+                                    <div style="display:flex; align-items:center; gap:8px; margin-bottom:18px;">
+                                        <span id="mqS2Label" style="font-family:monospace; color:#93a8c4; min-width:40px;">S2</span>
+                                        <input type="range" id="mqS2Slider" min="0" max="180" value="90" style="flex:1; accent-color:#00d4ff;"/>
+                                        <span id="mqS2Readout" style="font-family:monospace; color:#00d4ff; min-width:38px; text-align:right;">90°</span>
+                                    </div>
+                                    <div id="mqServoPresets" style="display:flex; gap:6px; flex-wrap:wrap; margin-top:10px;"></div>
+                                </div>
+
+                                <!-- SIMPLE LEDS -->
+                                <div style="background:rgba(250,204,21,0.05); border:1px solid rgba(250,204,21,0.3); border-radius:10px; padding:14px;">
+                                    <div style="font-weight:700; color:#facc15; margin-bottom:10px; display:flex; align-items:center; gap:8px;"><span style="font-size:18px;">💡</span> Simple LEDs</div>
+                                    <div style="display:flex; gap:8px;">
+                                        <button class="mq-led-btn" data-led="0" data-state="0" style="flex:1; padding:8px 12px; background:#0a1628; color:#facc15; border:1px solid #facc15; border-radius:6px; cursor:pointer; font-size:12px;">L: OFF</button>
+                                        <button class="mq-led-btn" data-led="1" data-state="0" style="flex:1; padding:8px 12px; background:#0a1628; color:#facc15; border:1px solid #facc15; border-radius:6px; cursor:pointer; font-size:12px;">R: OFF</button>
+                                    </div>
+                                    <div style="display:flex; gap:8px; margin-top:8px;">
+                                        <button id="mqLedBlink" style="flex:1; padding:6px; background:#0a1628; color:#facc15; border:1px solid #facc15; border-radius:6px; cursor:pointer; font-size:11px;">Blink both 5×</button>
+                                        <button id="mqLedAllOff" style="flex:1; padding:6px; background:#0a1628; color:#f87171; border:1px solid #f87171; border-radius:6px; cursor:pointer; font-size:11px;">All OFF</button>
+                                    </div>
+                                </div>
+
+                                <!-- 4× RGB NEOPIXELS -->
+                                <div style="background:rgba(244,114,182,0.05); border:1px solid rgba(244,114,182,0.3); border-radius:10px; padding:14px;">
+                                    <div style="font-weight:700; color:#f472b6; margin-bottom:10px; display:flex; align-items:center; gap:8px;"><span style="font-size:18px;">🌈</span> NeoPixels × 4</div>
+                                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
+                                        <label style="display:flex; align-items:center; gap:8px; font-size:12px; color:#93a8c4;">
+                                            RGB 0
+                                            <input type="color" class="mq-rgb-picker" data-i="0" value="#ff0000" style="flex:1; height:30px; border:none; background:none; cursor:pointer;"/>
+                                        </label>
+                                        <label style="display:flex; align-items:center; gap:8px; font-size:12px; color:#93a8c4;">
+                                            RGB 1
+                                            <input type="color" class="mq-rgb-picker" data-i="1" value="#00ff00" style="flex:1; height:30px; border:none; background:none; cursor:pointer;"/>
+                                        </label>
+                                        <label style="display:flex; align-items:center; gap:8px; font-size:12px; color:#93a8c4;">
+                                            RGB 2
+                                            <input type="color" class="mq-rgb-picker" data-i="2" value="#0000ff" style="flex:1; height:30px; border:none; background:none; cursor:pointer;"/>
+                                        </label>
+                                        <label style="display:flex; align-items:center; gap:8px; font-size:12px; color:#93a8c4;">
+                                            RGB 3
+                                            <input type="color" class="mq-rgb-picker" data-i="3" value="#ff00ff" style="flex:1; height:30px; border:none; background:none; cursor:pointer;"/>
+                                        </label>
+                                    </div>
+                                    <div style="display:flex; gap:6px; margin-top:10px;">
+                                        <button id="mqRgbAllOff" style="flex:1; padding:6px; background:#0a1628; color:#f87171; border:1px solid #f87171; border-radius:6px; cursor:pointer; font-size:11px;">All OFF</button>
+                                        <button id="mqRgbRainbow" style="flex:1; padding:6px; background:#0a1628; color:#f472b6; border:1px solid #f472b6; border-radius:6px; cursor:pointer; font-size:11px;">🌈 Rainbow</button>
+                                    </div>
+                                </div>
+
+                                <!-- BUZZER -->
+                                <div style="background:rgba(251,191,36,0.05); border:1px solid rgba(251,191,36,0.3); border-radius:10px; padding:14px;">
+                                    <div style="font-weight:700; color:#fbbf24; margin-bottom:10px; display:flex; align-items:center; gap:8px;"><span style="font-size:18px;">🔊</span> Buzzer</div>
+                                    <div style="display:flex; gap:4px; flex-wrap:wrap; margin-bottom:10px;">
+                                        <button class="mq-note" data-freq="262" style="flex:1; min-width:36px; padding:8px 4px; background:#0a1628; color:#fbbf24; border:1px solid #fbbf24; border-radius:6px; cursor:pointer; font-size:11px;">C</button>
+                                        <button class="mq-note" data-freq="294" style="flex:1; min-width:36px; padding:8px 4px; background:#0a1628; color:#fbbf24; border:1px solid #fbbf24; border-radius:6px; cursor:pointer; font-size:11px;">D</button>
+                                        <button class="mq-note" data-freq="330" style="flex:1; min-width:36px; padding:8px 4px; background:#0a1628; color:#fbbf24; border:1px solid #fbbf24; border-radius:6px; cursor:pointer; font-size:11px;">E</button>
+                                        <button class="mq-note" data-freq="349" style="flex:1; min-width:36px; padding:8px 4px; background:#0a1628; color:#fbbf24; border:1px solid #fbbf24; border-radius:6px; cursor:pointer; font-size:11px;">F</button>
+                                        <button class="mq-note" data-freq="392" style="flex:1; min-width:36px; padding:8px 4px; background:#0a1628; color:#fbbf24; border:1px solid #fbbf24; border-radius:6px; cursor:pointer; font-size:11px;">G</button>
+                                        <button class="mq-note" data-freq="440" style="flex:1; min-width:36px; padding:8px 4px; background:#0a1628; color:#fbbf24; border:1px solid #fbbf24; border-radius:6px; cursor:pointer; font-size:11px;">A</button>
+                                        <button class="mq-note" data-freq="494" style="flex:1; min-width:36px; padding:8px 4px; background:#0a1628; color:#fbbf24; border:1px solid #fbbf24; border-radius:6px; cursor:pointer; font-size:11px;">B</button>
+                                    </div>
+                                    <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+                                        <span style="font-size:11px; color:#93a8c4; min-width:38px;">Freq</span>
+                                        <input type="number" id="mqBuzzFreq" value="440" min="50" max="5000" step="10" style="flex:1; background:#0a1628; color:#fbbf24; border:1px solid #1d3556; border-radius:4px; padding:4px 8px; font-family:monospace;"/>
+                                        <span style="font-size:11px; color:#93a8c4;">Hz</span>
+                                    </div>
+                                    <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+                                        <span style="font-size:11px; color:#93a8c4; min-width:38px;">Dur</span>
+                                        <input type="number" id="mqBuzzMs" value="200" min="50" max="5000" step="50" style="flex:1; background:#0a1628; color:#fbbf24; border:1px solid #1d3556; border-radius:4px; padding:4px 8px; font-family:monospace;"/>
+                                        <span style="font-size:11px; color:#93a8c4;">ms</span>
+                                    </div>
+                                    <div style="display:flex; gap:6px;">
+                                        <button id="mqBuzzPlay" style="flex:1; padding:8px; background:#0a1628; color:#fbbf24; border:1px solid #fbbf24; border-radius:6px; cursor:pointer; font-size:12px;">▶ Play</button>
+                                        <button id="mqBuzzOff" style="flex:1; padding:8px; background:#0a1628; color:#f87171; border:1px solid #f87171; border-radius:6px; cursor:pointer; font-size:12px;">⏹ Off</button>
+                                    </div>
+                                </div>
+
+                                <!-- ULTRASONIC -->
+                                <div style="background:rgba(74,222,128,0.05); border:1px solid rgba(74,222,128,0.3); border-radius:10px; padding:14px;">
+                                    <div style="font-weight:700; color:#4ade80; margin-bottom:10px; display:flex; align-items:center; gap:8px;"><span style="font-size:18px;">📡</span> Ultrasonic distance <span style="font-family:'JetBrains Mono', monospace; font-size:10px; font-weight:400; color:#93a8c4; background:#0a1628; padding:1px 6px; border-radius:4px;">P1·P2</span></div>
+                                    <!-- Big distance readout + mini sonar arc -->
+                                    <div style="display:flex; align-items:center; gap:14px; margin-bottom:10px;">
+                                        <svg viewBox="0 0 80 60" style="width:80px; height:60px; flex-shrink:0;">
+                                            <path d="M 40 55 A 35 35 0 0 1 40 55" id="mqSonarArc" fill="none" stroke="#4ade80" stroke-width="2"/>
+                                            <path d="M 5 55 Q 40 5 75 55" fill="none" stroke="#1d3556" stroke-width="1.5"/>
+                                            <path d="M 15 55 Q 40 15 65 55" fill="none" stroke="#1d3556" stroke-width="1"/>
+                                            <path d="M 25 55 Q 40 25 55 55" fill="none" stroke="#1d3556" stroke-width="1"/>
+                                            <rect x="36" y="50" width="8" height="6" rx="1" fill="#4ade80"/>
+                                            <circle id="mqSonarDot" cx="40" cy="20" r="3" fill="#4ade80" filter="url(#glow)"/>
+                                        </svg>
+                                        <div style="flex:1; text-align:right;">
+                                            <div style="font-family:'JetBrains Mono', monospace; font-size:32px; font-weight:700; color:#4ade80; line-height:1;" id="mqDistBig">— cm</div>
+                                            <div style="font-size:11px; color:#93a8c4; margin-top:4px;" id="mqDistRange">range 0–500 cm</div>
+                                        </div>
+                                    </div>
+                                    <!-- Threshold bar -->
+                                    <div style="height:8px; background:#0a1628; border-radius:4px; overflow:hidden; margin-bottom:10px; position:relative;">
+                                        <div id="mqDistBar" style="height:100%; width:0%; background:linear-gradient(90deg, #f87171 0%, #fbbf24 30%, #4ade80 60%); transition:width 0.3s;"></div>
+                                    </div>
+                                    <!-- Controls -->
+                                    <div style="display:flex; gap:6px; align-items:center;">
+                                        <button id="mqDistPing" style="flex:1; padding:8px; background:#0a1628; color:#4ade80; border:1px solid #4ade80; border-radius:6px; cursor:pointer; font-size:12px;">📏 Ping now</button>
+                                        <label style="font-size:11px; color:#93a8c4; display:flex; align-items:center; gap:4px;">
+                                            <input type="checkbox" id="mqDistAuto" checked style="accent-color:#4ade80;"> auto
+                                        </label>
+                                    </div>
+                                    <div style="display:flex; gap:8px; align-items:center; margin-top:6px; font-size:10px; color:#93a8c4;">
+                                        <span>rate</span>
+                                        <input type="range" id="mqDistRate" min="200" max="2000" step="50" value="600" style="flex:1; accent-color:#4ade80;">
+                                        <span id="mqDistRateRead" style="font-family:'JetBrains Mono', monospace; color:#4ade80; min-width:60px; text-align:right;">600 ms</span>
+                                    </div>
+                                    <div style="margin-top:8px; font-family:'JetBrains Mono', monospace; font-size:10px; color:#93a8c4;">
+                                        history: <span id="mqDistHistory" style="color:#4ade80;">—</span>
+                                    </div>
+                                </div>
+
+                                <!-- LINE SENSORS -->
+                                <div style="background:rgba(74,222,128,0.05); border:1px solid rgba(74,222,128,0.3); border-radius:10px; padding:14px;">
+                                    <div style="font-weight:700; color:#4ade80; margin-bottom:10px; display:flex; align-items:center; gap:8px;"><span style="font-size:18px;">👀</span> Line sensors <span style="font-family:'JetBrains Mono', monospace; font-size:10px; font-weight:400; color:#93a8c4; background:#0a1628; padding:1px 6px; border-radius:4px;">P13·P14</span></div>
+                                    <!-- Two big "eyes" -->
+                                    <div style="display:flex; align-items:center; gap:18px; margin-bottom:10px; padding:10px; background:#061121; border-radius:8px;">
+                                        <div style="flex:1; display:flex; flex-direction:column; align-items:center; gap:6px;">
+                                            <div id="mqLineEyeL" style="width:48px; height:48px; border-radius:50%; background:#1d3556; border:2px solid #4ade80; transition:background 0.15s, box-shadow 0.15s;"></div>
+                                            <div style="font-family:'JetBrains Mono', monospace; font-size:11px; color:#93a8c4;">L: <span id="mqLineLVal" style="color:#4ade80; font-weight:700;">—</span></div>
+                                        </div>
+                                        <div style="flex:1; display:flex; flex-direction:column; align-items:center; gap:6px;">
+                                            <div id="mqLineEyeR" style="width:48px; height:48px; border-radius:50%; background:#1d3556; border:2px solid #4ade80; transition:background 0.15s, box-shadow 0.15s;"></div>
+                                            <div style="font-family:'JetBrains Mono', monospace; font-size:11px; color:#93a8c4;">R: <span id="mqLineRVal" style="color:#4ade80; font-weight:700;">—</span></div>
+                                        </div>
+                                    </div>
+                                    <div style="font-size:10px; color:#93a8c4; text-align:center; margin-bottom:10px;">
+                                        ● bright = on black line · ○ dim = on white floor
+                                    </div>
+                                    <!-- Controls -->
+                                    <div style="display:flex; gap:6px; align-items:center;">
+                                        <button id="mqLinePoll" style="flex:1; padding:8px; background:#0a1628; color:#4ade80; border:1px solid #4ade80; border-radius:6px; cursor:pointer; font-size:12px;">👁 Read now</button>
+                                        <label style="font-size:11px; color:#93a8c4; display:flex; align-items:center; gap:4px;">
+                                            <input type="checkbox" id="mqLineAuto" checked style="accent-color:#4ade80;"> auto
+                                        </label>
+                                    </div>
+                                    <div style="display:flex; gap:8px; align-items:center; margin-top:6px; font-size:10px; color:#93a8c4;">
+                                        <span>rate</span>
+                                        <input type="range" id="mqLineRate" min="200" max="2000" step="50" value="600" style="flex:1; accent-color:#4ade80;">
+                                        <span id="mqLineRateRead" style="font-family:'JetBrains Mono', monospace; color:#4ade80; min-width:60px; text-align:right;">600 ms</span>
+                                    </div>
+                                    <!-- Auto mode: line follower (uses these sensors as input) -->
+                                    <div style="margin-top:10px; padding-top:10px; border-top:1px solid #1d3556;">
+                                        <div style="display:flex; align-items:center; gap:6px; font-size:11px; color:#93a8c4; margin-bottom:6px;">
+                                            <span>🛣️ Auto mode</span>
+                                            <span id="mqLineState" style="margin-left:auto; font-family:'JetBrains Mono', monospace; color:#4ade80;">L:— R:—</span>
+                                        </div>
+                                        <button id="mqFollowBtn" style="width:100%; padding:8px; background:#0a1628; color:#4ade80; border:1px solid #4ade80; border-radius:6px; cursor:pointer; font-size:12px; font-weight:700;">🟢 Follow line</button>
+                                        <div style="display:flex; gap:8px; align-items:center; margin-top:6px; font-size:10px; color:#93a8c4;">
+                                            <span>tick</span>
+                                            <input type="range" id="mqFollowRate" min="100" max="1000" step="50" value="200" style="flex:1; accent-color:#4ade80;">
+                                            <span id="mqFollowRateRead" style="font-family:'JetBrains Mono', monospace; color:#4ade80; min-width:60px; text-align:right;">200 ms</span>
+                                        </div>
+                                        <div style="font-size:10px; color:#93a8c4; margin-top:4px; text-align:center;">uses Drive speed slider · steers via these eyes</div>
+                                    </div>
+                                </div>
+
+                                <!-- IR REMOTE -->
+                                <div style="background:rgba(192,132,252,0.05); border:1px solid rgba(192,132,252,0.3); border-radius:10px; padding:14px;">
+                                    <div style="font-weight:700; color:#c084fc; margin-bottom:10px; display:flex; align-items:center; gap:8px;"><span style="font-size:18px;">📺</span> IR remote <span style="font-family:'JetBrains Mono', monospace; font-size:10px; font-weight:400; color:#93a8c4; background:#0a1628; padding:1px 6px; border-radius:4px;">NEC</span></div>
+                                    <!-- Last code + flash indicator -->
+                                    <div style="display:flex; align-items:center; gap:12px; margin-bottom:10px;">
+                                        <div id="mqIRPulse" style="width:36px; height:36px; border-radius:50%; background:radial-gradient(circle, #1d3556 30%, #0a1628 70%); border:2px solid #c084fc; flex-shrink:0; transition:box-shadow 0.2s;"></div>
+                                        <div style="flex:1;">
+                                            <div style="font-size:11px; color:#93a8c4;">last code received</div>
+                                            <div style="font-family:'JetBrains Mono', monospace; font-size:22px; font-weight:700; color:#c084fc; line-height:1.1;" id="mqIRBig">—</div>
+                                            <div style="font-size:11px; color:#93a8c4; margin-top:2px;" id="mqIRName">point a NEC remote at the robot</div>
+                                        </div>
+                                    </div>
+                                    <!-- Recent codes -->
+                                    <div style="font-family:'JetBrains Mono', monospace; font-size:10px; color:#93a8c4; margin-bottom:10px; min-height:14px;">
+                                        recent: <span id="mqIRHistory" style="color:#c084fc;">—</span>
+                                    </div>
+                                    <!-- Polling + name learning -->
+                                    <div style="display:flex; gap:6px;">
+                                        <button id="mqIRPoll" style="flex:1; padding:8px; background:#0a1628; color:#c084fc; border:1px solid #c084fc; border-radius:6px; cursor:pointer; font-size:12px;">📡 Poll IR</button>
+                                        <button id="mqIRNameBtn" style="flex:1; padding:8px; background:#0a1628; color:#c084fc; border:1px solid #c084fc; border-radius:6px; cursor:pointer; font-size:12px;">🏷 Name last code</button>
+                                    </div>
+                                </div>
+
+                                <!-- HELP -->
+                                <div style="background:rgba(0,212,255,0.04); border:1px solid rgba(0,212,255,0.2); border-radius:10px; padding:14px; font-size:12px; color:#93a8c4; line-height:1.6;">
+                                    <div style="font-weight:700; color:#00d4ff; margin-bottom:8px;">ℹ️ Quick reference</div>
+                                    <div>• Flash <code>firmware/v1-maqueen-lib.ts</code> first.</div>
+                                    <div>• Click <strong>Connect</strong> top-right.</div>
+                                    <div>• Live readings appear in the strip above (LINE / DIST / IR / ACC).</div>
+                                    <div>• Echo round-trip and lost packets show in <code>BLE</code> bench.</div>
+                                    <div>• Pick a Mechanic Kit (top-right of this panel) to load servo presets.</div>
+                                    <div style="margin-top:8px;"><a href="schematics-kids.html" style="color:#00d4ff;">🤖 Meet your robot →</a></div>
+                                </div>
+
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- CONTROLS PAGE -->
+                    <div class="tab-page" data-page="controls">
+                        <div class="card">
+                            <div class="card-header">
+                                <div>
+                                    <div class="card-title">
+                                        <span class="icon">🎮</span>
+                                        <span data-i18n="controls_title">Controls</span>
+                                    </div>
+                                    <div class="card-subtitle expert-only">
+                                        Send commands to your micro:bit
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="controls-grid">
+                                <!-- Message -->
+                                <div class="control-section">
+                                    <div class="section-header">
+                                        <div class="section-title">
+                                            <span class="section-icon">💬</span>
+                                            <span data-i18n="show_message">Show a message</span>
+                                        </div>
+                                    </div>
+                                    <div class="form-row">
+                                        <input id="textInput" type="text" placeholder="Hello!" aria-label="Message to micro:bit">
+                                        <button id="sendTextBtn" class="primary" aria-label="Send text">
+                                            <span class="btn-icon">📨</span>
+                                            <span data-i18n="send">Send</span>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- LED matrix -->
+                                <div class="card">
+                                    <div class="card-header">
+                                        <div>
+                                            <div class="card-title">
+                                                <span class="icon">🎨</span>
+                                                <span data-i18n="draw_leds">Draw on LEDs</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="microbit-matrix-wrapper">
+                                        <div class="microbit-outline">
+                                            <div class="microbit-header">
+                                                <div class="microbit-chip"></div>
+                                                <div class="microbit-ears">
+                                                    <div class="microbit-ear"></div>
+                                                    <div class="microbit-ear"></div>
+                                                </div>
+                                            </div>
+                                            <div id="ledMatrix" class="led-matrix" role="grid" aria-label="5 by 5 LED drawing board"></div>
+                                            <div class="drawing-mode-hint" data-i18n="click_drag">Click and drag to draw!</div>
+                                        </div>
+
+<div class="matrix-controls">
+    <!-- Main actions -->
+    <div class="button-row">
+        <button id="sendLedPatternBtn" class="small primary" aria-label="Send LED pattern">
+            <span class="btn-icon">📤</span>
+            <span data-i18n="send">Send</span>
+        </button>
+        <button id="clearMatrixBtn" class="small secondary" aria-label="Clear LED matrix">
+            <span class="btn-icon">🧽</span>
+            <span data-i18n="clear">Clear</span>
+        </button>
+    </div>
+
+    <!-- Quick shapes -->
+    <div class="matrix-groups">
+        <div class="matrix-group">
+            <div class="matrix-group-label" data-i18n="quick_shapes">Quick shapes</div>
+            <div class="button-row compact">
+                <button class="chip-btn small" data-preset="heart">❤️ <span data-i18n="heart">Heart</span></button>
+                <button class="chip-btn small" data-preset="smile">😊 <span data-i18n="smile">Smile</span></button>
+                <button class="chip-btn small" data-preset="tick">✔ <span data-i18n="tick">Tick</span></button>
+            </div>
+        </div>
+
+        <!-- Show icons -->
+        <div class="matrix-group">
+            <div class="matrix-group-label" data-i18n="show_icons">Show icons</div>
+            <div class="button-row compact">
+                <button class="chip-btn small" data-cmd="HEART">❤️</button>
+                <button class="chip-btn small" data-cmd="SMILE">😊</button>
+                <button class="chip-btn small" data-cmd="SAD">😢</button>
+                <button class="chip-btn small" data-cmd="CLEAR">✖️</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+                                    </div>
+                                </div>
+<!-- BUZZER CONTROL removed — duplicate of Maqueen Buzzer (with same BUZZ: verb) -->
+
+                                <!-- Custom JSON (expert) -->
+                                <div class="control-section expert-only">
+                                    <div class="section-header">
+                                        <div class="section-title">
+                                            <span class="section-icon">🧪</span>
+                                            Custom JSON command
+                                        </div>
+                                        <div class="section-subtitle">
+                                            Send raw JSON payloads to the micro:bit for advanced experiments.
+                                        </div>
+                                    </div>
+<textarea id="customJsonInput" rows="4" class="code-input" aria-label="Custom JSON">
+{"type":"custom","payload":{"example":true}}</textarea>
+                                    <div class="button-row">
+                                        <button id="sendCustomJsonBtn" class="primary" aria-label="Send custom JSON">
+                                            <span class="btn-icon">📡</span>
+                                            Send JSON
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SENSES PAGE -->
+                    <div class="tab-page" data-page="senses">
+                        <div class="card">
+                            <div class="card-header">
+                                <div>
+                                    <div class="card-title">
+                                        <span class="icon">👀</span>
+                                        <span data-i18n="sensors_title">Sensors</span>
+                                    </div>
+                                    <div class="card-subtitle">
+                                        See what your micro:bit senses!
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="sensor-layout">
+                                <!-- Temperature -->
+                                <div class="sensor-block">
+                                    <div class="sensor-card big">
+                                        <div class="sensor-label" data-i18n="sensor_temp">🌡️ Temperature</div>
+                                        <div class="sensor-value">
+                                            <span id="tempValue">–</span><span class="sensor-unit">°C</span>
+                                        </div>
+                                        <div class="sensor-hint" data-i18n="hint_temp">Is it warm or cold?</div>
+                                    </div>
+                                    <div class="chart-container small expert-only">
+                                        <canvas id="tempChart"></canvas>
+                                    </div>
+                                </div>
+
+                                <!-- Light -->
+                                <div class="sensor-block">
+                                    <div class="sensor-card big">
+                                        <div class="sensor-label" data-i18n="sensor_light">💡 Light</div>
+                                        <div class="sensor-value">
+                                            <span id="lightValue">–</span>
+                                        </div>
+                                        <div class="sensor-hint" data-i18n="hint_light">Bright or dark?</div>
+                                    </div>
+                                    <div class="chart-container small expert-only">
+                                        <canvas id="lightChart"></canvas>
+                                    </div>
+                                </div>
+
+                                <!-- Sound -->
+                                <div class="sensor-block">
+                                    <div class="sensor-card big">
+                                        <div class="sensor-label" data-i18n="sensor_sound">🔊 Sound</div>
+                                        <div class="sensor-value">
+                                            <span id="soundValue">–</span>
+                                        </div>
+                                        <div class="sensor-hint" data-i18n="hint_sound">Clap or talk!</div>
+                                    </div>
+                                    <div class="chart-container small expert-only">
+                                        <canvas id="soundChart"></canvas>
+                                    </div>
+                                </div>
+
+                                <!-- Motion / Tilt (simplified for kids) -->
+                                <div class="sensor-block">
+                                    <div class="sensor-card big">
+                                        <div class="sensor-label" data-i18n="sensor_tilt">📱 Tilt & Shake</div>
+                                        <div class="sensor-value">
+                                            <span id="motionValue">–</span>
+                                        </div>
+                                        <div class="sensor-hint" data-i18n="hint_tilt">Move your micro:bit!</div>
+                                    </div>
+                                    <div class="chart-container small expert-only">
+                                        <canvas id="motionChart"></canvas>
+                                    </div>
+                                </div>
+
+                                <!-- Accel X (expert only) -->
+                                <div class="sensor-block expert-only">
+                                    <div class="sensor-card">
+                                        <div class="sensor-label" data-i18n="sensor_accel_x">Acceleration X</div>
+                                        <div class="sensor-value">
+                                            <span id="accelXValue">–</span><span class="sensor-unit">mg</span>
+                                        </div>
+                                    </div>
+                                    <div class="chart-container small">
+                                        <canvas id="accelXChart"></canvas>
+                                    </div>
+                                </div>
+
+                                <!-- Accel Y (expert only) -->
+                                <div class="sensor-block expert-only">
+                                    <div class="sensor-card">
+                                        <div class="sensor-label" data-i18n="sensor_accel_y">Acceleration Y</div>
+                                        <div class="sensor-value">
+                                            <span id="accelYValue">–</span><span class="sensor-unit">mg</span>
+                                        </div>
+                                    </div>
+                                    <div class="chart-container small">
+                                        <canvas id="accelYChart"></canvas>
+                                    </div>
+                                </div>
+
+                                <!-- Accel Z (expert only) -->
+                                <div class="sensor-block expert-only">
+                                    <div class="sensor-card">
+                                        <div class="sensor-label" data-i18n="sensor_accel_z">Acceleration Z</div>
+                                        <div class="sensor-value">
+                                            <span id="accelZValue">–</span><span class="sensor-unit">mg</span>
+                                        </div>
+                                    </div>
+                                    <div class="chart-container small">
+                                        <canvas id="accelZChart"></canvas>
+                                    </div>
+                                </div>
+
+                                <!-- Compass -->
+                                <div class="sensor-block">
+                                    <div class="sensor-card">
+                                        <div class="sensor-label" data-i18n="sensor_compass">🧭 Compass</div>
+                                        <div class="sensor-value">
+                                            <span id="compassHeadingValue">–</span><span class="sensor-unit">°</span>
+                                        </div>
+                                        <div class="sensor-hint beginner-show" data-i18n="hint_compass">Which way is North?</div>
+                                    </div>
+                                    <div class="chart-container small chart-placeholder expert-only">
+                                        <span class="chart-placeholder-text">No chart</span>
+                                    </div>
+                                </div>
+
+                                <!-- Button A -->
+                                <div class="sensor-block">
+                                    <div class="sensor-card big">
+                                        <div class="sensor-label" data-i18n="sensor_btn_a">Button A</div>
+                                        <div style="display:flex; gap:4px; margin-top:4px;">
+                                            <div id="btnAState" class="pill big">
+                                                <div id="btnADot" class="pill-dot"></div>
+                                                <span id="btnAText" class="pill-text">Ready</span>
+                                            </div>
+                                        </div>
+                                        <div class="sensor-hint" data-i18n="hint_btn_a">Press the A button!</div>
+                                    </div>
+                                    <div class="chart-container small">
+                                        <canvas id="btnAChart"></canvas>
+                                    </div>
+                                </div>
+
+                                <!-- Button B -->
+                                <div class="sensor-block">
+                                    <div class="sensor-card big">
+                                        <div class="sensor-label" data-i18n="sensor_btn_b">Button B</div>
+                                        <div style="display:flex; gap:4px; margin-top:4px;">
+                                            <div id="btnBState" class="pill big">
+                                                <div id="btnBDot" class="pill-dot"></div>
+                                                <span id="btnBText" class="pill-text">Ready</span>
+                                            </div>
+                                        </div>
+                                        <div class="sensor-hint" data-i18n="hint_btn_b">Press the B button!</div>
+                                    </div>
+                                    <div class="chart-container small">
+                                        <canvas id="btnBChart"></canvas>
+                                    </div>
+                                </div>
+
+                                <!-- Touch P0/P1/P2 cards removed — Maqueen wires P13/P14 to line sensors;
+                                     P0/P1/P2 are not exposed for capacitive touch on this hardware. -->
+
+                                <!-- Logo Touch -->
+                                <div class="sensor-block">
+                                    <div class="sensor-card big">
+                                        <div class="sensor-label" data-i18n="sensor_logo">Logo Touch</div>
+                                        <div style="display:flex; gap:4px; margin-top:4px;">
+                                            <div id="logoState" class="pill big">
+                                                <div id="logoDot" class="pill-dot"></div>
+                                                <span id="logoText" class="pill-text">Ready</span>
+                                            </div>
+                                        </div>
+                                        <div class="sensor-hint" data-i18n="hint_logo">Touch the logo</div>
+                                    </div>
+                                    <div class="chart-container small">
+                                        <canvas id="logoChart"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- ⚙️ CALIBRATION SECTION -->
+                            <div class="calibration-section">
+                                <div class="section-title"><span class="section-icon">⚙️</span> <span data-i18n="calibration">Calibration</span></div>
+                                <div class="calibration-grid">
+
+                                    <!-- 🧭 Compass Calibration -->
+                                    <div class="cal-item">
+                                        <div class="cal-label" data-i18n="cal_compass">🧭 Compass</div>
+                                        <div class="cal-status" id="calCompassStatus" data-i18n="not_calibrated">Not calibrated</div>
+                                        <button id="calCompassBtn" class="secondary small" data-i18n="calibrate">Calibrate</button>
+                                        <div class="cal-hint" data-i18n="cal_compass_hint">Tilt micro:bit to fill the LED screen</div>
+                                    </div>
+
+                                    <!-- ⚖️ Accelerometer Zero -->
+                                    <div class="cal-item">
+                                        <div class="cal-label" data-i18n="cal_accel">⚖️ Accel Zero</div>
+                                        <div class="cal-status" id="calAccelStatus" data-i18n="no_offset">No offset</div>
+                                        <div class="cal-values" id="calAccelValues"></div>
+                                        <div class="cal-row">
+                                            <button id="calAccelSetBtn" class="secondary small" data-i18n="set_level">Set Level</button>
+                                            <button id="calAccelResetBtn" class="secondary small" data-i18n="reset">Reset</button>
+                                        </div>
+                                        <div class="cal-hint" data-i18n="cal_accel_hint">Place micro:bit flat, then click Set Level</div>
+                                    </div>
+
+                                    <!-- 🔊 Sound Baseline -->
+                                    <div class="cal-item">
+                                        <div class="cal-label" data-i18n="cal_sound">🔊 Sound Baseline</div>
+                                        <div class="cal-status" id="calSoundStatus" data-i18n="no_baseline">No baseline</div>
+                                        <div class="cal-row">
+                                            <button id="calSoundSetBtn" class="secondary small" data-i18n="set_ambient">Set Ambient</button>
+                                            <button id="calSoundResetBtn" class="secondary small" data-i18n="reset">Reset</button>
+                                        </div>
+                                        <div class="cal-hint" data-i18n="cal_sound_hint">Quiet room → click Set Ambient</div>
+                                    </div>
+
+                                    <!-- 💡 Light Baseline -->
+                                    <div class="cal-item">
+                                        <div class="cal-label" data-i18n="cal_light">💡 Light Baseline</div>
+                                        <div class="cal-status" id="calLightStatus" data-i18n="no_baseline">No baseline</div>
+                                        <div class="cal-row">
+                                            <button id="calLightSetBtn" class="secondary small" data-i18n="set_ambient">Set Ambient</button>
+                                            <button id="calLightResetBtn" class="secondary small" data-i18n="reset">Reset</button>
+                                        </div>
+                                        <div class="cal-hint" data-i18n="cal_light_hint">Normal lighting → click Set Ambient</div>
+                                    </div>
+
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+
+                    <!-- SERVOS PAGE removed — duplicate of Maqueen Servos (kit picker + presets) -->
+                    <!-- GAMEPAD PAGE removed — duplicate of Maqueen Drive (joystick + speed) -->
+                    <!-- GRAPH PAGE -->
+<div class="tab-page" data-page="graph">
+    <div class="card">
+        <div class="card-header">
+            <div>
+                <div class="card-title">
+                    <span class="icon">📈</span>
+                    <span data-i18n="graph_title">Live Graph</span>
+                </div>
+                <div class="card-subtitle">
+                    Plot sensor data and custom values in real time.
+                </div>
+            </div>
+        </div>
+
+        <!-- Graph Type Selector -->
+        <div class="graph-controls">
+            <div class="graph-row">
+                <label class="graph-label">Type</label>
+                <div class="graph-type-group">
+                    <button class="graph-type-btn active" data-type="line" title="Line">📈 <span data-i18n="graph_line">Line</span></button>
+                    <button class="graph-type-btn" data-type="bar" title="Bar">📊 <span data-i18n="graph_bar">Bar</span></button>
+                    <button class="graph-type-btn" data-type="scatter" title="Scatter">🔘 <span data-i18n="graph_scatter">Scatter</span></button>
+                    <button class="graph-type-btn" data-type="area" title="Area">📐 <span data-i18n="graph_area">Area</span></button>
+                    <button class="graph-type-btn" data-type="realtime" title="Realtime">⚡ <span data-i18n="graph_realtime">Realtime</span></button>
+                </div>
+            </div>
+
+            <!-- Sensor Toggles -->
+            <div class="graph-row">
+                <label class="graph-label">Sensors</label>
+                <div class="graph-sensor-toggles">
+                    <label class="graph-toggle"><input type="checkbox" data-sensor="accelX" checked> Accel X</label>
+                    <label class="graph-toggle"><input type="checkbox" data-sensor="accelY" checked> Accel Y</label>
+                    <label class="graph-toggle"><input type="checkbox" data-sensor="accelZ" checked> Accel Z</label>
+                    <label class="graph-toggle"><input type="checkbox" data-sensor="compass" checked> Compass</label>
+                    <label class="graph-toggle"><input type="checkbox" data-sensor="sound" checked> Sound</label>
+                    <label class="graph-toggle"><input type="checkbox" data-sensor="light" checked> Light</label>
+                    <label class="graph-toggle"><input type="checkbox" data-sensor="temp" checked> Temp</label>
+                    <!-- Touch P0/P1/P2 toggles removed — Maqueen wires P13/P14 to line sensors;
+                         P0/P1/P2 are not exposed for capacitive touch on this hardware. -->
+                </div>
+            </div>
+
+            <!-- Options Row -->
+            <div class="graph-row">
+                <label class="graph-label">Options</label>
+                <div class="graph-options">
+                    <div class="graph-option">
+                        <label>Window</label>
+                        <select id="graphWindow">
+                            <option value="50">50 pts</option>
+                            <option value="100" selected>100 pts</option>
+                            <option value="200">200 pts</option>
+                            <option value="500">500 pts</option>
+                        </select>
+                    </div>
+                    <div class="graph-option">
+                        <label>Y-Axis</label>
+                        <select id="graphYAxis">
+                            <option value="auto" selected>Auto</option>
+                            <option value="0-255">0 – 255</option>
+                            <option value="0-1023">0 – 1023</option>
+                            <option value="-1024-1024">±1024</option>
+                            <option value="0-360">0 – 360</option>
+                        </select>
+                    </div>
+                    <div class="graph-option">
+                        <label>Lines</label>
+                        <select id="graphLineWidth">
+                            <option value="1">Thin</option>
+                            <option value="2" selected>Normal</option>
+                            <option value="3">Thick</option>
+                        </select>
+                    </div>
+                    <label class="graph-toggle"><input type="checkbox" id="graphGrid" checked> Grid</label>
+                </div>
+            </div>
+        </div>
+
+        <!-- Chart Canvas -->
+        <div class="graph-chart-wrap" id="graphChartWrap">
+            <canvas id="graphCanvas"></canvas>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="graph-actions">
+            <button id="graphSimBtn" class="secondary">🎲 <span data-i18n="simulate">Simulate</span></button>
+            <button id="graphPauseBtn" class="secondary">⏸ <span data-i18n="pause">Pause</span></button>
+            <button id="graphClearBtn" class="secondary">🗑 <span data-i18n="clear">Clear</span></button>
+            <button id="graphFullscreenBtn" class="secondary">🔲 <span data-i18n="fullscreen">Fullscreen</span></button>
+            <button id="graphRecordBtn" class="secondary">⏺ <span data-i18n="record">Record</span></button>
+            <button id="graphRecordPlay" class="secondary">▶ <span data-i18n="replay">Replay</span></button>
+            <button id="graphRecordExport" class="secondary">💾 <span data-i18n="save_session">Save Session</span></button>
+            <button id="graphAnnotateBtn" class="secondary">📝 <span data-i18n="note">Note</span></button>
+            <button id="graphExportPng" class="secondary">📷 <span data-i18n="png">PNG</span></button>
+            <button id="graphExportCsv" class="secondary">📄 <span data-i18n="csv">CSV</span></button>
+            <span class="graph-point-count" id="graphPointCount">0 pts</span>
+        </div>
+
+        <!-- Code Snippets (collapsible) -->
+        <details class="code-snippets">
+            <summary>📖 MakeCode Examples</summary>
+            <div class="snippet">
+                <div class="snippet-title">Send custom data to graph</div>
+                <pre><code>basic.forever(function () {
+    let distance = pins.analogReadPin(AnalogPin.P1)
+    serial.writeLine("GRAPH:Distance:" + distance)
+    basic.pause(200)
+})</code></pre>
+            </div>
+            <div class="snippet">
+                <div class="snippet-title">Plot multiple values</div>
+                <pre><code>serial.writeLine("GRAPH:Speed:" + speed)
+serial.writeLine("GRAPH:Angle:" + angle)
+serial.writeLine("GRAPH:Force:" + force)</code></pre>
+            </div>
+            <div class="snippet">
+                <div class="snippet-title">Conditional alert</div>
+                <pre><code>if (input.soundLevel() > 150) {
+    serial.writeLine("GRAPH:Loud:1")
+} else {
+    serial.writeLine("GRAPH:Loud:0")
+}</code></pre>
+            </div>
+        </details>
+    </div>
+</div>
+
+<!-- 3D BOARD PAGE -->
+<div class="tab-page" data-page="board3d">
+    <div class="card">
+        <div class="card-header">
+            <div>
+                <div class="card-title">
+                    <span class="icon">🎲</span>
+                    <span data-i18n="board3d_title">3D micro:bit</span>
+                </div>
+                <div class="card-subtitle" data-i18n="board3d_subtitle">
+                    Interactive 3D board — mirrors live sensor data
+                </div>
+            </div>
+        </div>
+
+        <div class="board3d-controls">
+            <select id="board3dModel" class="board3d-select" aria-label="3D model">
+                <option value="microbit">🎲 micro:bit V2</option>
+                <option value="buggy">🚗 Robot Buggy</option>
+                <option value="arm">🦾 Robot Arm</option>
+                <option value="balance">🎯 Balance Game</option>
+                <option value="weather">🌦️ Weather Station</option>
+            </select>
+            <button id="board3dResetView" class="secondary small">🔄 <span data-i18n="reset_view">Reset View</span></button>
+            <button id="board3dAutoRotate" class="secondary small">🔁 <span data-i18n="auto_rotate">Auto Rotate</span></button>
+            <button id="board3dLiveSync" class="secondary small active">📡 <span data-i18n="live_sync">Live Sync</span></button>
+            <div class="board3d-info">
+                <span id="board3dAccelInfo" class="board3d-pill">Accel: –</span>
+                <span id="board3dTempInfo" class="board3d-pill">Temp: –</span>
+            </div>
+        </div>
+
+        <div class="board3d-container" id="board3dContainer">
+            <canvas id="board3dCanvas"></canvas>
+        </div>
+
+        <div class="board3d-legend">
+            <span>🖱️ <span data-i18n="drag_rotate">Drag to rotate</span></span>
+            <span>🔍 <span data-i18n="scroll_zoom">Scroll to zoom</span></span>
+            <span>📡 <span data-i18n="live_info">Live: LEDs, tilt, buttons, touch</span></span>
+        </div>
+    </div>
+</div>
+
+<!-- BENCH PAGE -->
+<div class="tab-page" data-page="bench">
+    <div class="card">
+        <div class="card-header">
+            <div>
+                <div class="card-title">
+                    <span class="icon">🪑</span>
+                    <span data-i18n="bench_title">Bench</span>
+                </div>
+                <div class="card-subtitle" data-i18n="bench_subtitle">
+                    Tools and experiments for testing micro:bit features.
+                </div>
+            </div>
+        </div>
+
+        <div class="controls-grid">
+            <div class="control-section">
+                <div class="section-header">
+                    <div class="section-title">
+                        <span class="section-icon">🧪</span>
+                        Bench Tools
+                    </div>
+                    <div class="section-subtitle">
+                        Try out experimental commands or diagnostics here.
+                    </div>
+                </div>
+                <div class="form-row">
+                    <input id="benchInput" type="text" placeholder="Enter test command">
+                    <button id="benchSendBtn" class="primary" data-i18n="bench_send">Run</button>
+                </div>
+                <div class="hint">Use this area for experiments and debugging.</div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="control-section">
+  <div class="section-header">
+    <div class="section-title">
+      <span class="section-icon">📥</span>
+      <span data-i18n="bench_response">Bench Response</span>
+    </div>
+    <div class="section-subtitle">
+      Output from the micro:bit will appear here.
+    </div>
+  </div>
+
+  <!-- Response window -->
+  <div id="benchResponse" class="bench-response"></div>
+</div>
+
+
+</div>
+                 
+                    <!-- OTHERS PAGE -->
+<!-- OTHERS PAGE -->
+<div class="tab-page" data-page="others">
+
+    <div class="card">
+        <div class="card-header">
+            <div>
+                <div class="card-title">
+                    <span class="icon">✨</span>
+                    <span data-i18n="more_title">More</span>
+                </div>
+                <div class="card-subtitle" data-i18n="more_subtitle">
+                    Extra fun stuff!
+                </div>
+            </div>
+        </div>
+
+        <div class="tool-groups">
+
+            <!-- BASIC CONTROLS (Kid-friendly) -->
+            <details class="tool-group" open>
+                <summary class="section-header">
+                    <div class="section-title">
+                        <span class="section-icon">🎛️</span>
+                        <span data-i18n="fun_controls">Fun Controls</span>
+                    </div>
+                </summary>
+
+                <div class="controls-grid">
+                    <!-- Button -->
+                    <div class="control-section">
+                        <div class="section-header">
+                            <div class="section-title"><span class="section-icon">🔘</span><span data-i18n="other_button">Button</span></div>
+                        </div>
+                        <button id="otherButton" class="primary" style="width:100%;" data-i18n="press_me">Press me!</button>
+                    </div>
+
+                    <!-- Switch -->
+                    <div class="control-section">
+                        <div class="section-header">
+                            <div class="section-title"><span class="section-icon">⏻</span><span data-i18n="other_switch">Switch</span></div>
+                        </div>
+                        <div class="form-row" style="align-items:center;">
+                            <label style="display:flex; align-items:center; gap:8px;">
+                                <input id="otherSwitch" type="checkbox">
+                                <span id="otherSwitchLabel">Off</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Slider -->
+                    <div class="control-section">
+                        <div class="section-header">
+                            <div class="section-title"><span class="section-icon">🎚️</span><span data-i18n="other_slider">Slider</span></div>
+                        </div>
+                        <div class="form-row">
+                            <input id="otherSlider" type="range" min="0" max="100" value="50" style="flex:1;">
+                            <span id="otherSliderValue" style="margin-left:8px;">50</span>
+                        </div>
+                    </div>
+
+                    <!-- Keypad (moved up for kids) -->
+                    <div class="control-section">
+                        <div class="section-header">
+                            <div class="section-title"><span class="section-icon">🔢</span><span data-i18n="other_keypad">Keypad</span></div>
+                        </div>
+                        <div id="otherKeypad"
+                             style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px;">
+                            <button class="chip-btn other-keypad-btn" data-key="1">1</button>
+                            <button class="chip-btn other-keypad-btn" data-key="2">2</button>
+                            <button class="chip-btn other-keypad-btn" data-key="3">3</button>
+                            <button class="chip-btn other-keypad-btn" data-key="4">4</button>
+                            <button class="chip-btn other-keypad-btn" data-key="5">5</button>
+                            <button class="chip-btn other-keypad-btn" data-key="6">6</button>
+                            <button class="chip-btn other-keypad-btn" data-key="7">7</button>
+                            <button class="chip-btn other-keypad-btn" data-key="8">8</button>
+                            <button class="chip-btn other-keypad-btn" data-key="9">9</button>
+                        </div>
+                        <div style="margin-top:6px;font-size:0.8rem;">
+                            You pressed: <span id="otherKeypadLast">–</span>
+                        </div>
+                    </div>
+
+                    <!-- Joystick -->
+                    <div class="control-section">
+                        <div class="section-header">
+                            <div class="section-title"><span class="section-icon">🕹️</span><span data-i18n="other_joystick">Joystick</span></div>
+                        </div>
+                        <div style="display:grid;grid-template-columns:repeat(3,40px);grid-template-rows:repeat(3,40px);gap:4px;justify-content:center;">
+                            <div></div>
+                            <button class="chip-btn other-joy-btn" data-other-dir="UP">&#9650;</button>
+                            <div></div>
+                            <button class="chip-btn other-joy-btn" data-other-dir="LEFT">&#9668;</button>
+                            <button class="chip-btn other-joy-btn" data-other-dir="CENTER" style="font-size:0.6rem;">&#9679;</button>
+                            <button class="chip-btn other-joy-btn" data-other-dir="RIGHT">&#9658;</button>
+                            <div></div>
+                            <button class="chip-btn other-joy-btn" data-other-dir="DOWN">&#9660;</button>
+                            <div></div>
+                        </div>
+                    </div>
+
+                    <!-- Text string (simplified) -->
+                    <div class="control-section expert-only">
+                        <div class="section-header">
+                            <div class="section-title"><span class="section-icon">📝</span><span data-i18n="other_text">Text</span></div>
+                        </div>
+                        <div class="form-row">
+                            <input id="otherTextInput" type="text" placeholder="Enter text">
+                            <button id="otherTextSendBtn" class="primary">Send</button>
+                        </div>
+                        <div style="margin-top:6px; font-size:0.8rem;">
+                            Last: <span id="otherTextLast">(none)</span>
+                        </div>
+                    </div>
+                </div>
+            </details>
+
+            <!-- INDICATORS & OUTPUTS (Expert) -->
+            <details class="tool-group expert-only">
+                <summary class="section-header">
+                    <div class="section-title">
+                        <span class="section-icon">💡</span>
+                        <span data-i18n="indicators_outputs">Indicators & Outputs</span>
+                    </div>
+                    <div class="section-subtitle">
+                        Visual feedback from the system.
+                    </div>
+                </summary>
+
+                <div class="controls-grid">
+                    <!-- LED card removed — duplicate of Maqueen Simple LEDs -->
+
+                    <!-- Level -->
+                    <div class="control-section">
+                        <div class="section-header">
+                            <div class="section-title"><span class="section-icon">📊</span><span data-i18n="other_level">Level</span></div>
+                        </div>
+                        <progress id="otherLevel" max="100" value="30" style="width:100%;"></progress>
+                        <span id="otherLevelLabel" style="font-size:0.8rem;">30%</span>
+                    </div>
+
+                    <!-- Live graph -->
+                    <div class="control-section">
+                        <div class="section-header">
+                            <div class="section-title"><span class="section-icon">📈</span><span data-i18n="other_live_graph">Live Graph</span></div>
+                        </div>
+                        <div class="chart-container small">
+                            <canvas id="otherLiveChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Multi-series graph -->
+                    <div class="control-section">
+                        <div class="section-header">
+                            <div class="section-title"><span class="section-icon">📊</span><span data-i18n="other_multi_graph">Multi-Graph</span></div>
+                        </div>
+                        <div class="chart-container small">
+                            <canvas id="otherMultiChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Debug console -->
+                    <div class="control-section">
+                        <div class="section-header">
+                            <div class="section-title"><span class="section-icon">🧾</span><span data-i18n="other_debug_console">Debug Console</span></div>
+                        </div>
+                        <div id="otherConsole"
+                             style="height:120px;overflow:auto;border-radius:8px;border:1px solid var(--border-color,#555);padding:6px;font-family:var(--font-mono,monospace);font-size:0.7rem;background:rgba(0,0,0,0.4);">
+                        </div>
+                        <button id="otherConsoleClear" class="chip-btn" style="margin-top:6px;">Clear log</button>
+                    </div>
+
+                    <!-- Data capture -->
+                    <div class="control-section">
+                        <div class="section-header">
+                            <div class="section-title"><span class="section-icon">📄</span><span data-i18n="other_data_capture">Data Capture</span></div>
+                        </div>
+                        <div id="otherDataTable"
+                             style="height:120px;overflow:auto;border-radius:8px;border:1px solid var(--border-color,#555);padding:6px;font-size:0.7rem;">
+                            (No samples yet)
+                        </div>
+                        <button id="otherCsvDownloadBtn" class="chip-btn" style="margin-top:6px;">Download CSV</button>
+                    </div>
+                </div>
+            </details>
+
+            <!-- AUDIO, TIME & RANDOM (Expert) -->
+            <details class="tool-group expert-only">
+                <summary class="section-header">
+                    <div class="section-title">
+                        <span class="section-icon">⏱️</span>
+                        <span data-i18n="audio_time_random">Audio, Time & Random</span>
+                    </div>
+                    <div class="section-subtitle">
+                        Buzzer, timers and random tests.
+                    </div>
+                </summary>
+
+                <div class="controls-grid">
+                    <!-- Buzzer card removed — duplicate of Maqueen Buzzer -->
+
+                    <!-- Timer / stopwatch -->
+                    <div class="control-section">
+                        <div class="section-header">
+                            <div class="section-title"><span class="section-icon">⏱️</span><span data-i18n="other_timer">Timer</span></div>
+                        </div>
+                        <div id="otherTimerDisplay"
+                             style="font-family:var(--font-mono,monospace);font-size:1.1rem;margin-bottom:6px;">
+                            00:00.0
+                        </div>
+                        <div class="form-row">
+                            <button id="otherTimerStartBtn" class="chip-btn">Start</button>
+                            <button id="otherTimerStopBtn" class="chip-btn">Stop</button>
+                            <button id="otherTimerResetBtn" class="chip-btn">Reset</button>
+                        </div>
+                    </div>
+
+                    <!-- Delayed action -->
+                    <div class="control-section">
+                        <div class="section-header">
+                            <div class="section-title"><span class="section-icon">⏲️</span><span data-i18n="other_delay_action">Delay Action</span></div>
+                        </div>
+                        <div class="form-row">
+                            <input id="otherScheduleDelay" type="number" min="100" max="60000" value="1000"
+                                   style="width:100%;">
+                            <span style="font-size:0.75rem;margin-left:4px;">ms</span>
+                        </div>
+                        <button id="otherScheduleActionBtn" class="chip-btn" style="margin-top:6px;width:100%;">Schedule
+                            action
+                        </button>
+                    </div>
+
+                    <!-- Random generator -->
+                    <div class="control-section">
+                        <div class="section-header">
+                            <div class="section-title"><span class="section-icon">🎲</span><span data-i18n="other_random">Random</span></div>
+                        </div>
+                        <button id="otherRandomNumberBtn" class="primary" style="width:100%;">Generate random</button>
+                        <div style="margin-top:6px;font-size:0.85rem;">
+                            Value: <span id="otherRandomNumberValue">–</span>
+                        </div>
+                    </div>
+                </div>
+            </details>
+
+            <!-- ADVANCED CONTROLS & PRESETS (Expert) -->
+            <details class="tool-group expert-only">
+                <summary class="section-header">
+                    <div class="section-title">
+                        <span class="section-icon">🧠</span>
+                        <span data-i18n="advanced_controls">Advanced Controls & Presets</span>
+                    </div>
+                    <div class="section-subtitle">
+                        Modes, ranges, presets and global actions.
+                    </div>
+                </summary>
+
+                <div class="controls-grid">
+                    <!-- Mode selector -->
+                    <div class="control-section">
+                        <div class="section-header">
+                            <div class="section-title"><span class="section-icon">📂</span><span data-i18n="other_mode">Mode</span></div>
+                        </div>
+                        <select id="otherModeSelect" style="width:100%;">
+                            <option value="idle">Idle</option>
+                            <option value="test1">Test mode 1</option>
+                            <option value="test2">Test mode 2</option>
+                            <option value="safe">Safe mode</option>
+                        </select>
+                    </div>
+
+                    <!-- Numeric input -->
+                    <div class="control-section">
+                        <div class="section-header">
+                            <div class="section-title"><span class="section-icon">🔢</span><span data-i18n="other_numeric">Numeric</span></div>
+                        </div>
+                        <input id="otherNumberInput" type="number" min="0" max="1000" value="100" style="width:100%;">
+                    </div>
+
+                    <!-- Dual range -->
+                    <div class="control-section">
+                        <div class="section-header">
+                            <div class="section-title"><span class="section-icon">🏁</span><span data-i18n="other_range">Range</span></div>
+                        </div>
+                        <div class="form-row" style="flex-direction:column; gap:6px;">
+                            <div class="form-row">
+                                <span style="width:40px;font-size:0.75rem;">Min</span>
+                                <input id="otherRangeMin" type="range" min="0" max="100" value="20" style="flex:1;">
+                                <span id="otherRangeMinValue"
+                                      style="margin-left:6px;font-size:0.75rem;">20</span>
+                            </div>
+                            <div class="form-row">
+                                <span style="width:40px;font-size:0.75rem;">Max</span>
+                                <input id="otherRangeMax" type="range" min="0" max="100" value="80" style="flex:1;">
+                                <span id="otherRangeMaxValue"
+                                      style="margin-left:6px;font-size:0.75rem;">80</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Color picker -->
+                    <div class="control-section">
+                        <div class="section-header">
+                            <div class="section-title"><span class="section-icon">🎨</span><span data-i18n="other_color">Color</span></div>
+                        </div>
+                        <div class="form-row" style="align-items:center; gap:8px;">
+                            <input id="otherColorPicker" type="color" value="#ff0000"
+                                   style="width:50px; height:32px;">
+                            <span id="otherColorValue" style="font-size:0.8rem;">#ff0000</span>
+                        </div>
+                    </div>
+
+                    <!-- Presets -->
+                    <div class="control-section">
+                        <div class="section-header">
+                            <div class="section-title"><span class="section-icon">💾</span><span data-i18n="other_presets">Presets</span></div>
+                        </div>
+                        <input id="otherPresetName" type="text" placeholder="Preset name"
+                               style="width:100%;margin-bottom:6px;">
+                        <div class="form-row">
+                            <button id="otherPresetSaveBtn" class="chip-btn">Save</button>
+                            <select id="otherPresetLoadSelect" style="flex:1; margin-left:6px;">
+                                <option value="">(no presets)</option>
+                            </select>
+                        </div>
+                        <button id="otherPresetLoadBtn" class="chip-btn" style="margin-top:6px;width:100%;">Load preset
+                        </button>
+                    </div>
+
+                    <!-- Global controls -->
+                    <div class="control-section">
+                        <div class="section-header">
+                            <div class="section-title"><span class="section-icon">🧹</span><span data-i18n="other_global">Global</span></div>
+                        </div>
+                        <button id="otherGlobalResetBtn" class="chip-btn" style="width:100%;margin-bottom:4px;">Reset
+                            controls
+                        </button>
+                        <button id="otherGlobalClearBtn" class="chip-btn" style="width:100%;">Clear graphs & logs</button>
+                    </div>
+
+                    <!-- Theme -->
+                    <div class="control-section">
+                        <div class="section-header">
+                            <div class="section-title"><span class="section-icon">🎭</span><span data-i18n="other_theme">Theme</span></div>
+                        </div>
+                        <select id="otherThemeSelect" style="width:100%;">
+                            <option value="system">System default</option>
+                            <option value="dark">Dark</option>
+                            <option value="light">Light</option>
+                            <option value="funny">Funny mode</option>
+                        </select>
+                    </div>
+                </div>
+            </details>
+
+            <!-- SIMULATORS & HARDWARE-LIKE TOOLS (Expert) -->
+            <details class="tool-group expert-only">
+                <summary class="section-header">
+                    <div class="section-title">
+                        <span class="section-icon">🧪</span>
+                        <span data-i18n="simulators_hardware">Simulators & Hardware</span>
+                    </div>
+                    <div class="section-subtitle">
+                        LED matrix, sensors, pins, servo, keypad…
+                    </div>
+                </summary>
+
+                <div class="controls-grid">
+                    <!-- XY Pad -->
+                    <div class="control-section">
+                        <div class="section-header">
+                            <div class="section-title"><span class="section-icon">📐</span><span data-i18n="other_xy_pad">XY Pad</span></div>
+                        </div>
+                        <div id="otherXYPad"
+                             style="position:relative;width:100%;padding-top:100%;border-radius:8px;border:1px dashed var(--border-color,#555);background:rgba(255,255,255,0.03);cursor:crosshair;">
+                            <div id="otherXYDot"
+                                 style="position:absolute;width:12px;height:12px;border-radius:50%;background:var(--accent-color,#0ff);transform:translate(-50%,-50%);top:50%;left:50%;">
+                            </div>
+                        </div>
+                        <div style="margin-top:6px;font-size:0.75rem;">
+                            X: <span id="otherXValue">0.5</span> &nbsp; Y: <span id="otherYValue">0.5</span>
+                        </div>
+                    </div>
+
+                    <!-- LED matrix -->
+                    <div class="control-section">
+                        <div class="section-header">
+                            <div class="section-title"><span class="section-icon">🔲</span><span data-i18n="other_led_matrix">LED Matrix</span></div>
+                        </div>
+                        <div id="otherLedMatrix"
+                             style="display:grid;grid-template-columns:repeat(5,1fr);gap:4px;max-width:140px;">
+                            <!-- 25 cells -->
+                            <div class="other-matrix-cell" data-index="0"></div>
+                            <div class="other-matrix-cell" data-index="1"></div>
+                            <div class="other-matrix-cell" data-index="2"></div>
+                            <div class="other-matrix-cell" data-index="3"></div>
+                            <div class="other-matrix-cell" data-index="4"></div>
+                            <div class="other-matrix-cell" data-index="5"></div>
+                            <div class="other-matrix-cell" data-index="6"></div>
+                            <div class="other-matrix-cell" data-index="7"></div>
+                            <div class="other-matrix-cell" data-index="8"></div>
+                            <div class="other-matrix-cell" data-index="9"></div>
+                            <div class="other-matrix-cell" data-index="10"></div>
+                            <div class="other-matrix-cell" data-index="11"></div>
+                            <div class="other-matrix-cell" data-index="12"></div>
+                            <div class="other-matrix-cell" data-index="13"></div>
+                            <div class="other-matrix-cell" data-index="14"></div>
+                            <div class="other-matrix-cell" data-index="15"></div>
+                            <div class="other-matrix-cell" data-index="16"></div>
+                            <div class="other-matrix-cell" data-index="17"></div>
+                            <div class="other-matrix-cell" data-index="18"></div>
+                            <div class="other-matrix-cell" data-index="19"></div>
+                            <div class="other-matrix-cell" data-index="20"></div>
+                            <div class="other-matrix-cell" data-index="21"></div>
+                            <div class="other-matrix-cell" data-index="22"></div>
+                            <div class="other-matrix-cell" data-index="23"></div>
+                            <div class="other-matrix-cell" data-index="24"></div>
+                        </div>
+                        <button id="otherLedMatrixClear" class="chip-btn" style="margin-top:8px;">Clear</button>
+                    </div>
+
+                    <!-- Sensor simulator -->
+                    <div class="control-section">
+                        <div class="section-header">
+                            <div class="section-title"><span class="section-icon">🌡️</span><span data-i18n="other_sensors">Sensors</span></div>
+                        </div>
+                        <div class="form-row">
+                            <span style="width:80px;font-size:0.75rem;">Temp</span>
+                            <input id="otherSimTemp" type="range" min="-10" max="50" value="20" style="flex:1;">
+                            <span id="otherSimTempValue" style="margin-left:4px;font-size:0.75rem;">20°C</span>
+                        </div>
+                        <div class="form-row" style="margin-top:4px;">
+                            <span style="width:80px;font-size:0.75rem;">Light</span>
+                            <input id="otherSimLight" type="range" min="0" max="255" value="128" style="flex:1;">
+                            <span id="otherSimLightValue" style="margin-left:4px;font-size:0.75rem;">128</span>
+                        </div>
+                        <div class="form-row" style="margin-top:4px;">
+                            <span style="width:80px;font-size:0.75rem;">Sound</span>
+                            <input id="otherSimSound" type="range" min="0" max="255" value="64" style="flex:1;">
+                            <span id="otherSimSoundValue" style="margin-left:4px;font-size:0.75rem;">64</span>
+                        </div>
+                    </div>
+
+                    <!-- Pin control -->
+                    <div class="control-section">
+                        <div class="section-header">
+                            <div class="section-title"><span class="section-icon">🔌</span><span data-i18n="other_pins">Pins</span></div>
+                        </div>
+                        <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px;font-size:0.75rem;">
+                            <label><input id="otherPinD0" type="checkbox"> P0</label>
+                            <label><input id="otherPinD1" type="checkbox"> P1</label>
+                            <label><input id="otherPinD2" type="checkbox"> P2</label>
+                            <label><input id="otherPinD8" type="checkbox"> P8</label>
+                            <label><input id="otherPinD12" type="checkbox"> P12</label>
+                            <label><input id="otherPinD16" type="checkbox"> P16</label>
+                        </div>
+                        <div class="form-row" style="margin-top:6px;">
+                            <span style="font-size:0.75rem;">PWM P0</span>
+                            <input id="otherPinPwm0" type="range" min="0" max="1023" value="0" style="flex:1;">
+                        </div>
+                    </div>
+
+                    <!-- Servo card removed — duplicate of Maqueen Servos (kit picker) -->
+
+                    <!-- RGB strip -->
+                    <div class="control-section">
+                        <div class="section-header">
+                            <div class="section-title"><span class="section-icon">💡</span><span data-i18n="other_rgb_strip">RGB Strip</span></div>
+                        </div>
+                        <div id="otherStrip"
+                             style="display:flex;gap:4px;flex-wrap:wrap;">
+                            <div class="other-strip-led" data-index="0"></div>
+                            <div class="other-strip-led" data-index="1"></div>
+                            <div class="other-strip-led" data-index="2"></div>
+                            <div class="other-strip-led" data-index="3"></div>
+                            <div class="other-strip-led" data-index="4"></div>
+                            <div class="other-strip-led" data-index="5"></div>
+                            <div class="other-strip-led" data-index="6"></div>
+                            <div class="other-strip-led" data-index="7"></div>
+                        </div>
+                        <button id="otherStripClearBtn" class="chip-btn" style="margin-top:6px;">Clear strip</button>
+                    </div>
+
+                    <!-- Keypad -->
+                    <div class="control-section">
+                        <div class="section-header">
+                            <div class="section-title"><span class="section-icon">🔢</span><span data-i18n="other_keypad_sim">Keypad</span></div>
+                        </div>
+                        <div id="otherKeypad"
+                             style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px;">
+                            <button class="chip-btn other-keypad-btn" data-key="1">1</button>
+                            <button class="chip-btn other-keypad-btn" data-key="2">2</button>
+                            <button class="chip-btn other-keypad-btn" data-key="3">3</button>
+                            <button class="chip-btn other-keypad-btn" data-key="4">4</button>
+                            <button class="chip-btn other-keypad-btn" data-key="5">5</button>
+                            <button class="chip-btn other-keypad-btn" data-key="6">6</button>
+                            <button class="chip-btn other-keypad-btn" data-key="7">7</button>
+                            <button class="chip-btn other-keypad-btn" data-key="8">8</button>
+                            <button class="chip-btn other-keypad-btn" data-key="9">9</button>
+                        </div>
+                        <div style="margin-top:6px;font-size:0.8rem;">
+                            Last key: <span id="otherKeypadLast">–</span>
+                        </div>
+                    </div>
+
+                    <!-- File I/O -->
+                    <div class="control-section">
+                        <div class="section-header">
+                            <div class="section-title"><span class="section-icon">📁</span><span data-i18n="other_file_io">File I/O</span></div>
+                        </div>
+                        <input id="otherFileUpload" type="file" style="width:100%;margin-bottom:6px;">
+                        <div id="otherFileUploadLabel" style="font-size:0.75rem;">No file loaded</div>
+                    </div>
+                </div>
+            </details>
+
+        </div>
+    </div>
+
+    <!-- Response area (micro:bit output) -->
+    <div class="control-section">
+        <div class="section-header">
+            <div class="section-title"><span class="section-icon">📥</span><span data-i18n="other_response">Response</span></div>
+            <div class="section-subtitle" data-i18n="other_response_subtitle">Output from micro:bit.</div>
+        </div>
+        <div id="otherResponse" class="bench-response"></div>
+    </div>
+
+</div>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- ROW: Maqueen Lab footer link bar (full width, last row of .rows-container) -->
+        <div style="margin-top:8px; padding:14px 20px; background:linear-gradient(90deg, rgba(0,212,255,0.06), rgba(244,114,182,0.04)); border:1px solid rgba(0,212,255,0.2); border-radius:12px; display:flex; flex-wrap:wrap; gap:6px 14px; align-items:center; font-family:-apple-system, BlinkMacSystemFont, Inter, sans-serif; font-size:13.5px; color:#93a8c4; width:100%;">
+            <span style="font-weight:700; color:#00d4ff; padding-right:6px;">🤖 Maqueen Lab</span>
+            <a href="USER_GUIDE.html" style="color:#e6eef9; text-decoration:none; padding:4px 10px; border-radius:6px;">📖 User Guide</a>
+            <a href="schematics-kids.html" style="color:#e6eef9; text-decoration:none; padding:4px 10px; border-radius:6px;">🤖 Meet your robot</a>
+            <a href="schematics.html" style="color:#e6eef9; text-decoration:none; padding:4px 10px; border-radius:6px;">📐 Engineer schematic</a>
+            <a href="pinout.html" style="color:#e6eef9; text-decoration:none; padding:4px 10px; border-radius:6px;">📌 Pinout reference</a>
+            <a href="lab.html" style="color:#e6eef9; text-decoration:none; padding:4px 10px; border-radius:6px;">🧪 Component Lab</a>
+            <a href="plan.html" style="color:#e6eef9; text-decoration:none; padding:4px 10px; border-radius:6px;">📋 Build plan</a>
+            <a href="https://github.com/abourdim/maqueen-app" target="_blank" rel="noopener" style="color:#e6eef9; text-decoration:none; padding:4px 10px; border-radius:6px;">⭐ GitHub</a>
+            <span style="margin-left:auto; font-size:11px; color:#93a8c4;">v0.1.0 · forked from <a href="https://github.com/abourdim/bit-playground" style="color:#00d4ff;">bit-playground</a></span>
+        </div>
+
+    </div>
+</div>
+<!-- Firmware Code Overlay -->
+<div id="firmwareOverlay" class="overlay">
+    <div class="overlay-card" style="max-width:800px; width:95vw;">
+        <div class="overlay-title" data-i18n="fw_title">🤖 micro:bit Firmware</div>
+        <!-- Build stamp pulled live from the embedded source -->
+        <div id="fwStampLine" style="margin-bottom:8px; padding:6px 12px; background:#0a1628; border:1px solid rgba(0,212,255,0.3); border-radius:6px; font-family:'JetBrains Mono', monospace; font-size:12px; color:#00d4ff; display:inline-block;">
+            <span style="color:#93a8c4;">version</span> <span id="fwStampVersion">—</span>
+            <span style="color:#1d3556; margin:0 6px;">·</span>
+            <span style="color:#93a8c4;">built</span> <span id="fwStampDate">—</span>
+        </div>
+        <div style="margin-bottom:12px; font-size:0.85rem; opacity:0.8;" data-i18n="fw_intro">
+            Flash this code to your micro:bit V2 using MakeCode:
+        </div>
+        <ol style="font-size:0.8rem; margin-bottom:12px; padding-left:20px; opacity:0.8;">
+            <li data-i18n="fw_step1">Click Copy Code below</li>
+            <li data-i18n="fw_step2">Open MakeCode and switch to JavaScript mode</li>
+            <li data-i18n="fw_step3">Select all (Ctrl+A) and paste (Ctrl+V)</li>
+            <li data-i18n="fw_step4">Click Download and flash to your micro:bit</li>
+        </ol>
+        <div style="display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap;">
+            <button id="firmwareCopyBtn" class="primary" data-i18n="copy_code">Copy Code</button>
+            <a href="https://makecode.microbit.org/" target="_blank" rel="noopener" class="secondary" style="display:inline-flex; align-items:center; text-decoration:none; padding:8px 16px; border-radius:8px;" data-i18n="open_makecode">Open MakeCode</a>
+            <button id="firmwareCloseBtn" class="secondary" data-i18n="close">Close</button>
+        </div>
+        <div id="firmwareCodeWrap" style="max-height:60vh; overflow:auto; border-radius:8px; border:1px solid var(--card-border, #333); -webkit-overflow-scrolling:touch;">
+            <pre id="firmwareCode" style="margin:0; padding:12px; font-size:0.7rem; line-height:1.4; white-space:pre; tab-size:4; font-family:var(--font-mono, monospace); background:rgba(0,0,0,0.3); overflow-x:auto;"></pre>
+        </div>
+        <script id="firmwareSource" type="text/plain">LyoqCiAqID09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PQogKiAgTWFxdWVlbiBMYWIg4oCUIEZpcm13YXJlIHYxICh1c2VzIHB4dC1tYXF1ZWVuIGxpYnJhcnkpCiAqID09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PQogKgogKiBIYXJkd2FyZTogREZSb2JvdCBNYXF1ZWVuIExpdGUgdjQgKFJPQjAxNDgpCiAqIEV4dGVuc2lvbnMgcmVxdWlyZWQgKGFkZCBpbiBNYWtlQ29kZSDihpIgRXh0ZW5zaW9ucyk6CiAqICAg4oCiIHB4dC1tYXF1ZWVuICAgICAoaHR0cHM6Ly9naXRodWIuY29tL0RGUm9ib3QvcHh0LW1hcXVlZW4pCiAqCiAqIE9QVElPTkFMIOKAlCA0w5cgUkdCIGFtYmllbnQgTEVEczoKICogICBUaGUgc3RhbmRhcmQgJ25lb3BpeGVsJyBleHRlbnNpb24gQ09ORkxJQ1RTIHdpdGggJ2JsdWV0b290aCcgb24KICogICBtaWNybzpiaXQ7IE1ha2VDb2RlIGJsb2NrcyBhZGRpbmcgYm90aC4gQnkgZGVmYXVsdCB0aGlzIGZpcm13YXJlCiAqICAgc2hpcHMgV0lUSE9VVCB0aGUgbmVvcGl4ZWwgY2FsbCDigJQgUkdCOmkscixnLGIgY29tbWFuZHMgYXJlCiAqICAgYWNjZXB0ZWQgYW5kIGVjaG9lZCBidXQgb25seSBsb2dnZWQgdG8gVVNCIHNlcmlhbCAobm8gdmlzaWJsZQogKiAgIGVmZmVjdCBvbiB0aGUgc3RyaXApLgogKgogKiAgIFRvIGVuYWJsZSByZWFsIFJHQiBvdXRwdXQ6CiAqICAgICAxLiBUcnkgYSBCTEUtc2FmZSBOZW9QaXhlbCBmb3JrIGluIEV4dGVuc2lvbnMsIGUuZy46CiAqICAgICAgICAgIGh0dHBzOi8vZ2l0aHViLmNvbS9Cb2h3YXovcHh0LW5lb3BpeGVsCiAqICAgICAgICAgIGh0dHBzOi8vZ2l0aHViLmNvbS9vcGVuYmxvY2tjYy9weHQtbmVvcGl4ZWwtYmxlCiAqICAgICAyLiBVbmNvbW1lbnQgdGhlICdORU9QSVhFTCBCTE9DSycgYmVsb3cuCiAqICAgICAzLiBSZS1mbGFzaC4KICoKICogQkxFIFVBUlQgd2lyZSBwcm90b2NvbCDigJQgc2VxdWVuY2UtbnVtYmVyZWQsIGVjaG8tY29uZmlybWVkLgogKgogKiBDT01NQU5EUyAoYnJvd3NlciDihpIgbWljcm86Yml0KToKICogICAjTiBNOkwsUiAgICAgICAgICAgICAgICAgbW90b3JzLCBzaWduZWQgLTI1NS4uKzI1NSBlYWNoCiAqICAgI04gU1RPUCAgICAgICAgICAgICAgICAgIG1vdG9yIGJyYWtlCiAqICAgI04gTEVEOmkscyAgICAgICAgICAgICAgIGk9MHwxIChsZWZ0fHJpZ2h0KSwgcz0wfDEKICogICAjTiBSR0I6aSxyLGcsYiAgICAgICAgICAgaT0wLi4zIG9yICogICg0IFJHQiBhbWJpZW50IExFRHMpCiAqICAgI04gU1JWOmksYSAgICAgICAgICAgICAgIGk9MXwyLCBhPTAuLjE4MAogKiAgICNOIEJVWlo6ZixtcyAgICAgICAgICAgICBmPUh6ICgwID0gb2ZmKSwgbXM9ZHVyYXRpb24KICogICAjTiBMSU5FPyAgICAgICAgICAgICAgICAg4oaSIHJlcGx5IExJTkU6bCxyCiAqICAgI04gRElTVD8gICAgICAgICAgICAgICAgIOKGkiByZXBseSBESVNUOmNtCiAqICAgI04gSVI/ICAgICAgICAgICAgICAgICAgIOKGkiByZXBseSBJUjpjb2RlCiAqICAgI04gTE9HOmxldmVsICAgICAgICAgICAgIDA9c2lsZW50LCAxPXJ4L3R4LCAyPStleGVjLCAzPStzZW5zb3IgcG9sbHMKICogICAjTiBCRU5DSDpQSU5HICAgICAgICAgICAg4oaSIHJlcGx5IEJFTkNIOlBPTkcgKGxhdGVuY3kgY2hlY2spCiAqICAgI04gQkVOQ0g6UkVTRVQgICAgICAgICAgIHJlc2V0IGJlbmNoIGNvdW50ZXJzCiAqICAgI04gQURET046TElTVCAgICAgICAgICAgIOKGkiByZXBseSBBRERPTjpub25lIChzdHViYmVkKQogKiAgICNOIEFERE9OOlJFQUQ6PHBvcnQ+ICAgICDihpIgcmVwbHkgQURET046PHBvcnQ+OjAgKHN0dWJiZWQpCiAqICAgI04gSTJDOlNDQU4gICAgICAgICAgICAgIOKGkiByZXBseSBJMkM6MHgxMCAoc3R1YmJlZCDigJQgb25seSBtb3RvciBkcml2ZXIpCiAqICAgI04gSEVMTE8gICAgICAgICAgICAgICAgIGNvbm5lY3Rpb24gY2hlY2ssIHJlcGxpZXMgSEVMTE86PHZlcj4KICoKICogUkVQTElFUyAobWljcm86Yml0IOKGkiBicm93c2VyKToKICogICBFQ0hPOk4gPHZlcmI+ICAgICAgICAgICAgYWNrIG9mIHJlY2VpdmVkLWFuZC1wYXJzZWQgY29tbWFuZAogKiAgIDxyZXBseSBsaW5lPiAgICAgICAgICAgICB2YWx1ZSByZXBseSAoTElORTpsLHIsIERJU1Q6Y20sIElSOmNvZGUsIGV0Yy4pCiAqICAgQUNDOngseSx6ICAgICAgICAgICAgICAgIGFjY2VsZXJvbWV0ZXIsIH4yMCBIeiBvbiBjaGFuZ2UKICogICBJUjpjb2RlICAgICAgICAgICAgICAgICAgcHVzaGVkIHdoZW4gSVIgcmVtb3RlIHByZXNzZWQKICogICBJTkZPOkNPTk5FQ1RFRCAgICAgICAgICAgb24gQkxFIGNvbm5lY3QKICogICBJTkZPOkRJU0NPTk5FQ1RFRCAgICAgICAgb24gQkxFIGRpc2Nvbm5lY3QKICogICBFUlI6TiA8cmVhc29uPiAgICAgICAgICAgY29tbWFuZCBwYXJzZS9leGVjIGVycm9yIGZvciBzZXEgTgogKgogKiBVU0IgU0VSSUFMICgxMTUyMDAgYmF1ZCkg4oCUIG1pcnJvcnMgZXZlcnl0aGluZyBmb3IgZGVidWdnaW5nLgogKgogKiBCVUlMRCBTVEFNUCDigJQgZWRpdCB0aGVzZSB0d28gbGluZXMgYmVmb3JlIGZsYXNoaW5nOgogKi8KY29uc3QgQlVJTERfVkVSU0lPTiA9ICIwLjEuNTQiCmNvbnN0IEJVSUxEX0RBVEUgPSAiMjAyNi0wNC0yNyAwNzo0NiBVVEMiCgovLyAtLS0tLS0tLS0tIHN0YXRlIC0tLS0tLS0tLS0KbGV0IGJ0Q29ubmVjdGVkID0gZmFsc2UKbGV0IGxvZ0xldmVsID0gMCAgICAgICAgICAgICAgICAgICAgLy8gMD1zaWxlbnQgKGRlZmF1bHQpLCAxPXJ4L3R4LCAyPStleGVjLCAzPStzZW5zb3IgcG9sbHMKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgLy8gQ1JJVElDQUw6IGtlZXAgZGVmYXVsdCAwIOKAlCBzZXJpYWwud3JpdGVMaW5lCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC8vIGNhbiBibG9jayB0aGUgQkxFIGhhbmRsZXIgZmliZXIgd2hlbiBubyBVU0IKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgLy8gbW9uaXRvciBpcyByZWFkaW5nLCBraWxsaW5nIGFsbCBlY2hvZXMuCmxldCBzdHJlYW1zRW5hYmxlZCA9IGZhbHNlICAgICAgICAgIC8vIDAgPSBubyBhdXRvLXN0cmVhbXMgKGRlZmF1bHQpLgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAvLyBXZWIgYXBwIHNlbmRzICdTVFJFQU06b24nIG9uY2UgaXQncwogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAvLyByZWFkeSB0byByZWNlaXZlIEFDQy9URU1QL0xJR0hUL2V0Yy4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgLy8gU3RyZWFtaW5nIGJlZm9yZSB0aGUgQkxFIGNoYW5uZWwgaXMKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgLy8gcmVhZHkgb3Igd2hpbGUgUlggaXMgYnVzeSBzdGFydmVzIHRoZQogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAvLyByZWNlaXZlIGhhbmRsZXIuCmxldCBsYXN0QWNjID0gWzAsIDAsIDBdCmxldCBhY2NEZWFkYmFuZCA9IDMwICAgICAgICAgICAgICAgIC8vIG1nCmxldCBiZW5jaFNlbnQgPSAwCmxldCBiZW5jaEVjaG8gPSAwCgovLyAtLS0tLS0tLS0tIHV0aWxpdHk6IGxvZyB0byBVU0Igc2VyaWFsIC0tLS0tLS0tLS0KZnVuY3Rpb24gc2xvZyhtc2c6IHN0cmluZykgewogICAgc2VyaWFsLndyaXRlTGluZShtc2cpCn0KCmZ1bmN0aW9uIHJ4bG9nKGxpbmU6IHN0cmluZykgewogICAgaWYgKGxvZ0xldmVsID49IDEpIHNsb2coIltyeF0gICAiICsgbGluZSkKfQoKZnVuY3Rpb24gdHhsb2cobGluZTogc3RyaW5nKSB7CiAgICBpZiAobG9nTGV2ZWwgPj0gMSkgc2xvZygiW3R4XSAgICIgKyBsaW5lKQp9CgpmdW5jdGlvbiBleGVjbG9nKG1zZzogc3RyaW5nKSB7CiAgICBpZiAobG9nTGV2ZWwgPj0gMikgc2xvZygiW2V4ZWNdICIgKyBtc2cpCn0KCi8vIC0tLS0tLS0tLS0gc2VuZCBsaW5lIG9uIEJMRSBvbmx5IChVU0IgbG9nIHZpYSB0eGxvZyBhdCBsb2dMZXZlbCA+PSAxKSAtLS0tLS0tLS0tCi8vIElNUE9SVEFOVDogc2VyaWFsLndyaXRlTGluZSBjYW4gQkxPQ0sgdGhlIGNhbGxpbmcgZmliZXIgd2hlbiB0aGUgVVNCCi8vIG91dHB1dCBidWZmZXIgaXMgZnVsbCBhbmQgbm8gaG9zdCBtb25pdG9yIGlzIHJlYWRpbmcgaXQuIENhbGxpbmcgaXQgb24KLy8gZXZlcnkgQkxFIFRYIGZyZWV6ZXMgdGhlIHJlY2VpdmUgaGFuZGxlciDihpIgMCBlY2hvZXMgZXZlciByZXR1cm4uCi8vIHR4bG9nIGlzIGdhdGVkIG9uIGxvZ0xldmVsIHdoaWNoIGRlZmF1bHRzIHRvIDAgKHNpbGVudCkuCmZ1bmN0aW9uIHNlbmQobGluZTogc3RyaW5nKSB7CiAgICBpZiAoYnRDb25uZWN0ZWQpIGJsdWV0b290aC51YXJ0V3JpdGVMaW5lKGxpbmUpCiAgICBpZiAobG9nTGV2ZWwgPj0gMSkgdHhsb2cobGluZSkKfQoKLy8gLS0tLS0tLS0tLSBib290IGJhbm5lciAob25seSBlbWl0cyBpZiB1c2VyIGVuYWJsZWQgVVNCIGxvZ3MgdmlhIExPRzpuKSAtLS0tLS0tLS0tCmZ1bmN0aW9uIGJvb3RCYW5uZXIoKSB7CiAgICBpZiAobG9nTGV2ZWwgPCAxKSByZXR1cm4KICAgIHNsb2coIiIpCiAgICBzbG9nKCI9PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT0iKQogICAgc2xvZygiW2Jvb3RdIE1hcXVlZW4gTGFiIGZpcm13YXJlIHYiICsgQlVJTERfVkVSU0lPTiArICIgYnVpbHQgIiArIEJVSUxEX0RBVEUpCiAgICBzbG9nKCJbYm9vdF0gaGFyZHdhcmU6IE1hcXVlZW4gTGl0ZSB2NCAoUk9CMDE0OCkiKQogICAgc2xvZygiW2Jvb3RdIEJMRSBVQVJUIHJlYWR5IOKAlCB3YWl0aW5nIGZvciBjb25uZWN0aW9uIikKICAgIHNsb2coIj09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PSIpCn0KCi8vIC0tLS0tLS0tLS0gQkxFIGNvbm5lY3Rpb24gc3RhdGUgLS0tLS0tLS0tLQpibHVldG9vdGgub25CbHVldG9vdGhDb25uZWN0ZWQoZnVuY3Rpb24gKCkgewogICAgYnRDb25uZWN0ZWQgPSB0cnVlCiAgICBiYXNpYy5zaG93SWNvbihJY29uTmFtZXMuWWVzKQogICAgYmx1ZXRvb3RoLnVhcnRXcml0ZUxpbmUoIklORk86Q09OTkVDVEVEIikKICAgIGlmIChsb2dMZXZlbCA+PSAxKSBzbG9nKCJbYmxlXSAgY29ubmVjdGVkIikKfSkKCmJsdWV0b290aC5vbkJsdWV0b290aERpc2Nvbm5lY3RlZChmdW5jdGlvbiAoKSB7CiAgICBidENvbm5lY3RlZCA9IGZhbHNlCiAgICBiYXNpYy5zaG93SWNvbihJY29uTmFtZXMuTm8pCiAgICBpZiAobG9nTGV2ZWwgPj0gMSkgc2xvZygiW2JsZV0gIGRpc2Nvbm5lY3RlZCIpCn0pCgovLyAtLS0tLS0tLS0tIGNvbW1hbmQgcGFyc2VyIC0tLS0tLS0tLS0KLy8gUGFyc2VzIG9wdGlvbmFsIGxlYWRpbmcgIiNOICIgc2VxdWVuY2UgbnVtYmVyLCByZXR1cm5zIFtzZXEsIHZlcmJdIG9yIFstMSwgZnVsbF0KZnVuY3Rpb24gcGFyc2VTZXEobGluZTogc3RyaW5nKTogeyBzZXE6IG51bWJlciwgdmVyYjogc3RyaW5nIH0gewogICAgaWYgKGxpbmUubGVuZ3RoID4gMCAmJiBsaW5lLmNoYXJBdCgwKSA9PSAiIyIpIHsKICAgICAgICBsZXQgc3AgPSBsaW5lLmluZGV4T2YoIiAiKQogICAgICAgIGlmIChzcCA+IDEpIHsKICAgICAgICAgICAgbGV0IHNlcVN0ciA9IGxpbmUuc3Vic3RyKDEsIHNwIC0gMSkKICAgICAgICAgICAgbGV0IHNlcSA9IHBhcnNlSW50KHNlcVN0cikKICAgICAgICAgICAgaWYgKCFpc05hTihzZXEpKSB7CiAgICAgICAgICAgICAgICByZXR1cm4geyBzZXE6IHNlcSwgdmVyYjogbGluZS5zdWJzdHIoc3AgKyAxKSB9CiAgICAgICAgICAgIH0KICAgICAgICB9CiAgICB9CiAgICByZXR1cm4geyBzZXE6IC0xLCB2ZXJiOiBsaW5lIH0KfQoKLy8gLS0tLS0tLS0tLSBzZW5kIGVjaG8gZm9yIGEgc2VxdWVuY2UgLS0tLS0tLS0tLQpmdW5jdGlvbiBlY2hvKHNlcTogbnVtYmVyLCB2ZXJiOiBzdHJpbmcpIHsKICAgIGlmIChzZXEgPj0gMCkgc2VuZCgiRUNITzoiICsgc2VxICsgIiAiICsgdmVyYikKICAgIGVsc2Ugc2VuZCgiRUNITyAiICsgdmVyYikKfQoKZnVuY3Rpb24gZXJyKHNlcTogbnVtYmVyLCByZWFzb246IHN0cmluZykgewogICAgaWYgKHNlcSA+PSAwKSBzZW5kKCJFUlI6IiArIHNlcSArICIgIiArIHJlYXNvbikKICAgIGVsc2Ugc2VuZCgiRVJSICIgKyByZWFzb24pCn0KCi8vIC0tLS0tLS0tLS0gaGVscGVyczogcGFyc2UgY29tbWEtc2VwYXJhdGVkIGludHMgLS0tLS0tLS0tLQpmdW5jdGlvbiBzcGxpdEludHMoczogc3RyaW5nKTogbnVtYmVyW10gewogICAgbGV0IHBhcnRzID0gcy5zcGxpdCgiLCIpCiAgICBsZXQgb3V0OiBudW1iZXJbXSA9IFtdCiAgICBmb3IgKGxldCBpID0gMDsgaSA8IHBhcnRzLmxlbmd0aDsgaSsrKSB7CiAgICAgICAgb3V0LnB1c2gocGFyc2VJbnQocGFydHNbaV0udHJpbSgpKSkKICAgIH0KICAgIHJldHVybiBvdXQKfQoKLy8gLS0tLS0tLS0tLSB2ZXJiIGhhbmRsZXJzIC0tLS0tLS0tLS0KLy8gTTpMLFIg4oCUIG1vdG9ycyBzaWduZWQgLTI1NS4uMjU1CmZ1bmN0aW9uIGhhbmRsZU1vdG9yKGFyZzogc3RyaW5nKSB7CiAgICBsZXQgdiA9IHNwbGl0SW50cyhhcmcpCiAgICBpZiAodi5sZW5ndGggPCAyKSByZXR1cm4KICAgIGxldCBMID0gTWF0aC5jb25zdHJhaW4odlswXSwgLTI1NSwgMjU1KQogICAgbGV0IFIgPSBNYXRoLmNvbnN0cmFpbih2WzFdLCAtMjU1LCAyNTUpCiAgICBsZXQgZGlyTCA9IEwgPj0gMCA/IG1hcXVlZW4uRGlyLkNXIDogbWFxdWVlbi5EaXIuQ0NXCiAgICBsZXQgZGlyUiA9IFIgPj0gMCA/IG1hcXVlZW4uRGlyLkNXIDogbWFxdWVlbi5EaXIuQ0NXCiAgICBtYXF1ZWVuLm1vdG9yUnVuKG1hcXVlZW4uTW90b3JzLk0xLCBkaXJMLCBNYXRoLmFicyhMKSkKICAgIG1hcXVlZW4ubW90b3JSdW4obWFxdWVlbi5Nb3RvcnMuTTIsIGRpclIsIE1hdGguYWJzKFIpKQogICAgZXhlY2xvZygibW90b3JzIEw9IiArIEwgKyAiIFI9IiArIFIpCn0KCmZ1bmN0aW9uIGhhbmRsZVN0b3AoKSB7CiAgICBtYXF1ZWVuLm1vdG9yU3RvcChtYXF1ZWVuLk1vdG9ycy5BbGwpCiAgICBleGVjbG9nKCJtb3RvcnMgU1RPUCIpCn0KCi8vIExFRDppLHMKZnVuY3Rpb24gaGFuZGxlTEVEKGFyZzogc3RyaW5nKSB7CiAgICBsZXQgdiA9IHNwbGl0SW50cyhhcmcpCiAgICBpZiAodi5sZW5ndGggPCAyKSByZXR1cm4KICAgIGxldCBsZWQgPSB2WzBdID09IDAgPyBtYXF1ZWVuLkxFRC5MRURMZWZ0IDogbWFxdWVlbi5MRUQuTEVEUmlnaHQKICAgIGxldCBzdyA9IHZbMV0gPT0gMCA/IG1hcXVlZW4uTEVEc3dpdGNoLnR1cm5PZmYgOiBtYXF1ZWVuLkxFRHN3aXRjaC50dXJuT24KICAgIG1hcXVlZW4ud3JpdGVMRUQobGVkLCBzdykKICAgIGV4ZWNsb2coIkxFRCAiICsgdlswXSArICI9IiArIHZbMV0pCn0KCi8vIFJHQjppLHIsZyxiIOKAlCBpPTAuLjMgb3IgKiBmb3IgYWxsCi8vIERFRkFVTFQ6IHN0dWIgKGxvZ3MgdG8gc2VyaWFsIG9ubHkpIOKAlCBubyBuZW9waXhlbCBkZXBlbmRlbmN5IHNvIHRoZQovLyBmaXJtd2FyZSBjb21waWxlcyB3aXRob3V0IHRoZSBuZW9waXhlbCBleHRlbnNpb24uIFNlZSBmaWxlIGhlYWRlciBmb3IKLy8gaG93IHRvIGVuYWJsZSByZWFsIFJHQiBvdXRwdXQuCmZ1bmN0aW9uIGhhbmRsZVJHQihhcmc6IHN0cmluZykgewogICAgbGV0IHBhcnRzID0gYXJnLnNwbGl0KCIsIikKICAgIGlmIChwYXJ0cy5sZW5ndGggPCA0KSByZXR1cm4KICAgIGxldCByID0gcGFyc2VJbnQocGFydHNbMV0pCiAgICBsZXQgZyA9IHBhcnNlSW50KHBhcnRzWzJdKQogICAgbGV0IGIgPSBwYXJzZUludChwYXJ0c1szXSkKICAgIGV4ZWNsb2coIlJHQiAiICsgcGFydHNbMF0gKyAiID0gIiArIHIgKyAiLCIgKyBnICsgIiwiICsgYiArICIgIChzdHViIOKAlCBubyBuZW9waXhlbCkiKQp9CgovLyA9PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT0KLy8gTkVPUElYRUwgQkxPQ0sg4oCUIHVuY29tbWVudCBPTkxZIGlmIHlvdSBoYXZlIGEgQkxFLXNhZmUgbmVvcGl4ZWwKLy8gZXh0ZW5zaW9uIGluc3RhbGxlZCAoZS5nLiBCb2h3YXovcHh0LW5lb3BpeGVsKS4gVGhlbiBERUxFVEUgdGhlIHN0dWIKLy8gaGFuZGxlUkdCIGFib3ZlIHNvIHRoaXMgdmVyc2lvbiBpcyB1c2VkIGluc3RlYWQuCi8vID09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PQovLyBsZXQgcmdiU3RyaXA6IG5lb3BpeGVsLlN0cmlwID0gbnVsbAovLyBmdW5jdGlvbiByZ2JJbml0KCkgewovLyAgICAgaWYgKHJnYlN0cmlwID09IG51bGwpIHsKLy8gICAgICAgICByZ2JTdHJpcCA9IG5lb3BpeGVsLmNyZWF0ZShEaWdpdGFsUGluLlAxNSwgNCwgTmVvUGl4ZWxNb2RlLlJHQikKLy8gICAgICAgICByZ2JTdHJpcC5zZXRCcmlnaHRuZXNzKDgwKQovLyAgICAgfQovLyB9Ci8vIGZ1bmN0aW9uIGhhbmRsZVJHQihhcmc6IHN0cmluZykgewovLyAgICAgbGV0IHBhcnRzID0gYXJnLnNwbGl0KCIsIikKLy8gICAgIGlmIChwYXJ0cy5sZW5ndGggPCA0KSByZXR1cm4KLy8gICAgIHJnYkluaXQoKQovLyAgICAgbGV0IHIgPSBNYXRoLmNvbnN0cmFpbihwYXJzZUludChwYXJ0c1sxXSksIDAsIDI1NSkKLy8gICAgIGxldCBnID0gTWF0aC5jb25zdHJhaW4ocGFyc2VJbnQocGFydHNbMl0pLCAwLCAyNTUpCi8vICAgICBsZXQgYiA9IE1hdGguY29uc3RyYWluKHBhcnNlSW50KHBhcnRzWzNdKSwgMCwgMjU1KQovLyAgICAgbGV0IGNvbG9yID0gbmVvcGl4ZWwucmdiKHIsIGcsIGIpCi8vICAgICBpZiAocGFydHNbMF0gPT0gIioiKSB7Ci8vICAgICAgICAgZm9yIChsZXQgaSA9IDA7IGkgPCA0OyBpKyspIHJnYlN0cmlwLnNldFBpeGVsQ29sb3IoaSwgY29sb3IpCi8vICAgICB9IGVsc2UgewovLyAgICAgICAgIGxldCBpZHggPSBNYXRoLmNvbnN0cmFpbihwYXJzZUludChwYXJ0c1swXSksIDAsIDMpCi8vICAgICAgICAgcmdiU3RyaXAuc2V0UGl4ZWxDb2xvcihpZHgsIGNvbG9yKQovLyAgICAgfQovLyAgICAgcmdiU3RyaXAuc2hvdygpCi8vICAgICBleGVjbG9nKCJSR0IgIiArIHBhcnRzWzBdICsgIiA9ICIgKyByICsgIiwiICsgZyArICIsIiArIGIpCi8vIH0KCi8vIFNSVjppLGEKZnVuY3Rpb24gaGFuZGxlU2Vydm8oYXJnOiBzdHJpbmcpIHsKICAgIGxldCB2ID0gc3BsaXRJbnRzKGFyZykKICAgIGlmICh2Lmxlbmd0aCA8IDIpIHJldHVybgogICAgbGV0IHBvcnQgPSB2WzBdID09IDEgPyBtYXF1ZWVuLlNlcnZvcy5TMSA6IG1hcXVlZW4uU2Vydm9zLlMyCiAgICBsZXQgYW5nbGUgPSBNYXRoLmNvbnN0cmFpbih2WzFdLCAwLCAxODApCiAgICBtYXF1ZWVuLnNlcnZvUnVuKHBvcnQsIGFuZ2xlKQogICAgLy8gQnJvYWRjYXN0IHBvc2l0aW9uIHNvIGJpdC1wbGF5Z3JvdW5kJ3Mgc2Vydm8gZ2F1Z2VzICsgM0QgYXJtIHJlZmxlY3QgaXQKICAgIGlmICh2WzBdID09IDEpIHNlbmQoIlNFUlZPMV9QT1M6IiArIGFuZ2xlKQogICAgZWxzZSBzZW5kKCJTRVJWTzJfUE9TOiIgKyBhbmdsZSkKICAgIGV4ZWNsb2coIlNSViAiICsgdlswXSArICI9IiArIGFuZ2xlKQp9CgovLyBCVVpaOmYsbXMKZnVuY3Rpb24gaGFuZGxlQnV6eihhcmc6IHN0cmluZykgewogICAgbGV0IHYgPSBzcGxpdEludHMoYXJnKQogICAgaWYgKHYubGVuZ3RoIDwgMSkgcmV0dXJuCiAgICBsZXQgZnJlcSA9IHZbMF0KICAgIGxldCBtcyA9IHYubGVuZ3RoID4gMSA/IHZbMV0gOiAyMDAKICAgIGlmIChmcmVxIDw9IDApIHsKICAgICAgICBtdXNpYy5zdG9wQWxsU291bmRzKCkKICAgICAgICBleGVjbG9nKCJCVVpaIG9mZiIpCiAgICB9IGVsc2UgewogICAgICAgIG11c2ljLnBsYXlUb25lKGZyZXEsIG1zKQogICAgICAgIGV4ZWNsb2coIkJVWlogIiArIGZyZXEgKyAiSHogIiArIG1zICsgIm1zIikKICAgIH0KfQoKLy8gTElORT8KZnVuY3Rpb24gaGFuZGxlTGluZVF1ZXJ5KCkgewogICAgbGV0IGwgPSBtYXF1ZWVuLnJlYWRQYXRyb2wobWFxdWVlbi5QYXRyb2wuUGF0cm9sTGVmdCkKICAgIGxldCByID0gbWFxdWVlbi5yZWFkUGF0cm9sKG1hcXVlZW4uUGF0cm9sLlBhdHJvbFJpZ2h0KQogICAgc2VuZCgiTElORToiICsgbCArICIsIiArIHIpCiAgICBpZiAobG9nTGV2ZWwgPj0gMykgZXhlY2xvZygiTElORSBsPSIgKyBsICsgIiByPSIgKyByKQp9CgovLyBESVNUPwpmdW5jdGlvbiBoYW5kbGVEaXN0UXVlcnkoKSB7CiAgICAvLyBweHQtbWFxdWVlbiB2MS43LjE2OiBVbHRyYXNvbmljKCkgdGFrZXMgbm8gYXJncywgcmV0dXJucyBjbSBkaXJlY3RseQogICAgbGV0IGNtID0gbWFxdWVlbi5VbHRyYXNvbmljKCkKICAgIC8vIDUwMCBpcyBweHQtbWFxdWVlbidzICJubyBlY2hvIC8gb3V0IG9mIHJhbmdlIiBzZW50aW5lbDsgMCBpcyBhIGJhZCByZWFkLgogICAgLy8gVHJhbnNsYXRlIHRvICItIiBzbyB0aGUgbG9nIGxpbmUgIkRJU1Q6LSIgaXMgc2VsZi1leHBsYW5hdG9yeSBpbnN0ZWFkCiAgICAvLyBvZiB0aGUgY29uZnVzaW5nICJESVNUOjUwMCIuIEFwcCBzaWRlIGFscmVhZHkgdHJlYXRzIGJvdGggYXMgIm5vIHJlYWRpbmciLgogICAgaWYgKGNtIDw9IDAgfHwgY20gPj0gNTAwKSB7CiAgICAgICAgc2VuZCgiRElTVDotIikKICAgIH0gZWxzZSB7CiAgICAgICAgc2VuZCgiRElTVDoiICsgY20pCiAgICB9CiAgICBpZiAobG9nTGV2ZWwgPj0gMykgZXhlY2xvZygiRElTVCBjbT0iICsgY20pCn0KCi8vIElSPyDigJQgU1RVQkJFRCAoc2VlIHNldHVwSVIgY29tbWVudCBiZWxvdyBmb3IgcmUtZW5hYmxpbmcpCmxldCBsYXN0SVJDb2RlID0gMApmdW5jdGlvbiBoYW5kbGVJUlF1ZXJ5KCkgewogICAgc2VuZCgiSVI6IiArIGxhc3RJUkNvZGUpCiAgICBpZiAobG9nTGV2ZWwgPj0gMykgZXhlY2xvZygiSVIgY29kZT0iICsgbGFzdElSQ29kZSArICIgIChzdHViKSIpCn0KCi8vIElSIHNldHVwIOKAlCBTVFVCQkVEIHRvIGF2b2lkIGV4dGVuc2lvbiBjb25mbGljdHMuCi8vCi8vIFRoZSBgSVJgIG5hbWVzcGFjZSBpcyBwcm92aWRlZCBieSBCT1RIOgovLyAgIOKAoiBgcHh0LWRmcm9ib3RfbmV3aXJgIHYwLjAuNCAoYXV0by1wdWxsZWQgYnkgcHh0LW1hcXVlZW4gdjEuNy4xNikKLy8gICDigKIgU29tZSBzdGFuZGFsb25lIGBpcmAgZXh0ZW5zaW9ucyAoZS5nLiB2MC4wLjIpCi8vIFdoZW4gYm90aCBhcmUgbG9hZGVkIE1ha2VDb2RlIGhpdHMgYW4gaW50ZXJuYWwgJyEhcHJvYyB8fCAhYmluLmZpbmFsUGFzcycKLy8gYXNzZXJ0aW9uIGZhaWx1cmUgZHVyaW5nIGZpbmFsUGFzcy4KLy8KLy8gVG8gZW5hYmxlIHJlYWwgSVIgc3VwcG9ydDoKLy8gICAxLiBPcGVuIE1ha2VDb2RlIOKGkiBFeHRlbnNpb25zCi8vICAgMi4gUkVNT1ZFIGFueSBzdGFuZGFsb25lICdpcicgZXh0ZW5zaW9uIChvbmx5IG1hcXVlZW4gKyBibHVldG9vdGggKwovLyAgICAgIG1pY3JvcGhvbmUgKyBjb3JlICsgcmFkaW8gc2hvdWxkIGJlIGxpc3RlZCkKLy8gICAzLiBVbmNvbW1lbnQgdGhlICdJUiBCTE9DSycgYmVsb3cgKyBkZWxldGUgdGhlIGVtcHR5IHNldHVwSVIgc3R1YgovLyAgIDQuIFJlLWZsYXNoCmZ1bmN0aW9uIHNldHVwSVIoKSB7CiAgICAvLyBuby1vcAp9CgovLyA9PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT0KLy8gSVIgQkxPQ0sg4oCUIHVuY29tbWVudCBhZnRlciByZW1vdmluZyBhbnkgc3RhbmRhbG9uZSAnaXInIGV4dGVuc2lvbgovLyAoc2VlIGNvbW1lbnQgYWJvdmUpLiBSZXBsYWNlcyB0aGUgc3R1YiBzZXR1cElSKCkgYWJvdmUuCi8vID09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PQovLyBmdW5jdGlvbiBzZXR1cElSKCkgewovLyAgICAgSVIuSVJfaW5pdCgpCi8vICAgICBJUi5JUl9jYWxsYmFja1VzZXIoZnVuY3Rpb24gKCkgewovLyAgICAgICAgIGxldCBjb2RlID0gSVIuSVJfcmVhZCgpCi8vICAgICAgICAgaWYgKGNvZGUgIT0gMCkgewovLyAgICAgICAgICAgICBsYXN0SVJDb2RlID0gY29kZQovLyAgICAgICAgICAgICBpZiAoYnRDb25uZWN0ZWQpIHNlbmQoIklSOiIgKyBjb2RlKQovLyAgICAgICAgICAgICBleGVjbG9nKCJJUiBwcmVzcyBjb2RlPSIgKyBjb2RlKQovLyAgICAgICAgIH0KLy8gICAgIH0pCi8vIH0KCi8vIExPRzpuCmZ1bmN0aW9uIGhhbmRsZUxvZyhhcmc6IHN0cmluZykgewogICAgbGV0IG4gPSBwYXJzZUludChhcmcpCiAgICBpZiAoIWlzTmFOKG4pKSB7CiAgICAgICAgbG9nTGV2ZWwgPSBNYXRoLmNvbnN0cmFpbihuLCAwLCAzKQogICAgICAgIGV4ZWNsb2coImxvZ0xldmVsPSIgKyBsb2dMZXZlbCkKICAgIH0KfQoKLy8gQkVOQ0g6UElORyAvIEJFTkNIOlJFU0VUCmZ1bmN0aW9uIGhhbmRsZUJlbmNoKGFyZzogc3RyaW5nKSB7CiAgICBpZiAoYXJnID09ICJQSU5HIikgewogICAgICAgIHNlbmQoIkJFTkNIOlBPTkciKQogICAgfSBlbHNlIGlmIChhcmcgPT0gIlJFU0VUIikgewogICAgICAgIGJlbmNoU2VudCA9IDAKICAgICAgICBiZW5jaEVjaG8gPSAwCiAgICAgICAgc2VuZCgiQkVOQ0g6UkVTRVQiKQogICAgfQp9CgovLyBBRERPTiBzdHVicyAodjAuMS4wIHJlc2VydmVzIHRoZSB2ZXJiIG5hbWVzcGFjZSkKZnVuY3Rpb24gaGFuZGxlQWRkb24oYXJnOiBzdHJpbmcpIHsKICAgIGlmIChhcmcgPT0gIkxJU1QiKSBzZW5kKCJBRERPTjpub25lIikKICAgIGVsc2UgaWYgKGFyZy5zdWJzdHIoMCwgNSkgPT0gIlJFQUQ6IikgewogICAgICAgIGxldCBwb3J0ID0gYXJnLnN1YnN0cig1KQogICAgICAgIHNlbmQoIkFERE9OOiIgKyBwb3J0ICsgIjowIikKICAgIH0KfQoKLy8gSTJDIHN0dWJzCmZ1bmN0aW9uIGhhbmRsZUkyQyhhcmc6IHN0cmluZykgewogICAgaWYgKGFyZyA9PSAiU0NBTiIpIHNlbmQoIkkyQzoweDEwIikKICAgIGVsc2Ugc2VuZCgiSTJDOk5PVF9JTVBMIikKfQoKLy8gLS0tLS0tLS0tLSBtYWluIFVBUlQgUlggLS0tLS0tLS0tLQpibHVldG9vdGgub25VYXJ0RGF0YVJlY2VpdmVkKHNlcmlhbC5kZWxpbWl0ZXJzKERlbGltaXRlcnMuTmV3TGluZSksIGZ1bmN0aW9uICgpIHsKICAgIGxldCByYXcgPSBibHVldG9vdGgudWFydFJlYWRVbnRpbChzZXJpYWwuZGVsaW1pdGVycyhEZWxpbWl0ZXJzLk5ld0xpbmUpKQogICAgcmF3ID0gcmF3LnRyaW0oKQogICAgcnhsb2cocmF3KQoKICAgIGxldCBwID0gcGFyc2VTZXEocmF3KQogICAgbGV0IHNlcSA9IHAuc2VxCiAgICBsZXQgdmVyYiA9IHAudmVyYgoKICAgIC8vIGV2ZXJ5IHJlY2VpdmVkIGNvbW1hbmQgZ2V0cyBlY2hvZWQgZmlyc3QKICAgIGVjaG8oc2VxLCB2ZXJiKQoKICAgIC8vIGRpc3BhdGNoCiAgICBpZiAodmVyYi5zdWJzdHIoMCwgMikgPT0gIk06IikgewogICAgICAgIGhhbmRsZU1vdG9yKHZlcmIuc3Vic3RyKDIpKQogICAgfSBlbHNlIGlmICh2ZXJiID09ICJTVE9QIikgewogICAgICAgIGhhbmRsZVN0b3AoKQogICAgfSBlbHNlIGlmICh2ZXJiLnN1YnN0cigwLCA0KSA9PSAiTEVEOiIpIHsKICAgICAgICBoYW5kbGVMRUQodmVyYi5zdWJzdHIoNCkpCiAgICB9IGVsc2UgaWYgKHZlcmIuc3Vic3RyKDAsIDQpID09ICJSR0I6IikgewogICAgICAgIGhhbmRsZVJHQih2ZXJiLnN1YnN0cig0KSkKICAgIH0gZWxzZSBpZiAodmVyYi5zdWJzdHIoMCwgNCkgPT0gIlNSVjoiKSB7CiAgICAgICAgaGFuZGxlU2Vydm8odmVyYi5zdWJzdHIoNCkpCiAgICB9IGVsc2UgaWYgKHZlcmIuc3Vic3RyKDAsIDUpID09ICJCVVpaOiIpIHsKICAgICAgICBoYW5kbGVCdXp6KHZlcmIuc3Vic3RyKDUpKQogICAgfSBlbHNlIGlmICh2ZXJiID09ICJMSU5FPyIpIHsKICAgICAgICBoYW5kbGVMaW5lUXVlcnkoKQogICAgfSBlbHNlIGlmICh2ZXJiID09ICJESVNUPyIpIHsKICAgICAgICBoYW5kbGVEaXN0UXVlcnkoKQogICAgfSBlbHNlIGlmICh2ZXJiID09ICJJUj8iKSB7CiAgICAgICAgaGFuZGxlSVJRdWVyeSgpCiAgICB9IGVsc2UgaWYgKHZlcmIuc3Vic3RyKDAsIDQpID09ICJMT0c6IikgewogICAgICAgIGhhbmRsZUxvZyh2ZXJiLnN1YnN0cig0KSkKICAgIH0gZWxzZSBpZiAodmVyYi5zdWJzdHIoMCwgNikgPT0gIkJFTkNIOiIpIHsKICAgICAgICBoYW5kbGVCZW5jaCh2ZXJiLnN1YnN0cig2KSkKICAgIH0gZWxzZSBpZiAodmVyYi5zdWJzdHIoMCwgNikgPT0gIkFERE9OOiIpIHsKICAgICAgICBoYW5kbGVBZGRvbih2ZXJiLnN1YnN0cig2KSkKICAgIH0gZWxzZSBpZiAodmVyYi5zdWJzdHIoMCwgNCkgPT0gIkkyQzoiKSB7CiAgICAgICAgaGFuZGxlSTJDKHZlcmIuc3Vic3RyKDQpKQogICAgfSBlbHNlIGlmICh2ZXJiID09ICJIRUxMTyIpIHsKICAgICAgICBzZW5kKCJIRUxMTzoiICsgQlVJTERfVkVSU0lPTikKICAgIH0gZWxzZSBpZiAodmVyYiA9PSAiU1RSRUFNOm9uIikgewogICAgICAgIHN0cmVhbXNFbmFibGVkID0gdHJ1ZQogICAgICAgIHNlbmQoIlNUUkVBTTpvbiIpCiAgICB9IGVsc2UgaWYgKHZlcmIgPT0gIlNUUkVBTTpvZmYiKSB7CiAgICAgICAgc3RyZWFtc0VuYWJsZWQgPSBmYWxzZQogICAgICAgIHNlbmQoIlNUUkVBTTpvZmYiKQogICAgfQogICAgLy8gLS0tLSBiaXQtcGxheWdyb3VuZCBicmlkZ2UgdmVyYnMgKHNvIGV4aXN0aW5nIFVJIHRhYnMgd29yaykgLS0tLQogICAgZWxzZSBpZiAodmVyYi5zdWJzdHIoMCwgNSkgPT0gIlRFWFQ6IikgewogICAgICAgIGxldCBtc2cgPSB2ZXJiLnN1YnN0cig1KQogICAgICAgIGlmIChtc2cubGVuZ3RoID4gMCkgYmFzaWMuc2hvd1N0cmluZyhtc2cpCiAgICAgICAgZXhlY2xvZygiVEVYVCAiICsgbXNnKQogICAgfSBlbHNlIGlmICh2ZXJiLnN1YnN0cigwLCA0KSA9PSAiQ01EOiIpIHsKICAgICAgICBoYW5kbGVJY29uKHZlcmIuc3Vic3RyKDQpKQogICAgfSBlbHNlIGlmICh2ZXJiLnN1YnN0cigwLCA3KSA9PSAiU0VSVk8xOiIpIHsKICAgICAgICBoYW5kbGVTZXJ2bygiMSwiICsgdmVyYi5zdWJzdHIoNykpCiAgICB9IGVsc2UgaWYgKHZlcmIuc3Vic3RyKDAsIDcpID09ICJTRVJWTzI6IikgewogICAgICAgIGhhbmRsZVNlcnZvKCIyLCIgKyB2ZXJiLnN1YnN0cig3KSkKICAgIH0gZWxzZSBpZiAodmVyYi5zdWJzdHIoMCwgNCkgPT0gIlRBQjoiKSB7CiAgICAgICAgLy8gdGFiLWNoYW5nZSBub3RpZmljYXRpb24g4oCUIHNpbGVudCBhY2sKICAgICAgICBleGVjbG9nKCJ0YWI9IiArIHZlcmIuc3Vic3RyKDQpKQogICAgfSBlbHNlIGlmICh2ZXJiLnN1YnN0cigwLCA5KSA9PSAiU0lNVUxBVEU6IikgewogICAgICAgIC8vIGlnbm9yZSDigJQgYml0LXBsYXlncm91bmQgc2ltdWxhdG9yIChncmFwaCBkZW1vIGRhdGEpCiAgICB9IGVsc2UgaWYgKHZlcmIuc3Vic3RyKDAsIDQpID09ICJDQUw6IikgewogICAgICAgIC8vIGNhbGlicmF0aW9uIHJlcXVlc3QgKGUuZy4gQ0FMOkNPTVBBU1MpIOKAlCBtaW5pbWFsIGFjawogICAgICAgIHNlbmQoIkNBTDoiICsgdmVyYi5zdWJzdHIoNCkgKyAiOkRPTkUiKQogICAgfSBlbHNlIGlmICh2ZXJiLnN1YnN0cigwLCA2KSA9PSAiT1RIRVI6IikgewogICAgICAgIC8vIGJpdC1wbGF5Z3JvdW5kICJPdGhlcnMiIHRhYiDigJQgZ2l2ZSB0aGUgbW9zdC11c2VkIG9uZXMgdmlzaWJsZQogICAgICAgIC8vIGZlZWRiYWNrIG9uIHRoZSA1eDUgTEVEIG1hdHJpeCBzbyB0aGUgTW9yZSB0YWIgaXMgbW9yZSB0aGFuIGEKICAgICAgICAvLyBzaWxlbnQgYWNrLiBFdmVyeXRoaW5nIHN0aWxsIGdldHMgdGhlIE9USEVSOkFDSzouLi4gcmVwbHkuCiAgICAgICAgbGV0IHBheWxvYWQgPSB2ZXJiLnN1YnN0cig2KQogICAgICAgIGhhbmRsZU90aGVyKHBheWxvYWQpCiAgICAgICAgc2VuZCgiT1RIRVI6QUNLOiIgKyBwYXlsb2FkKQogICAgfSBlbHNlIGlmICh2ZXJiLnN1YnN0cigwLCAzKSA9PSAiTE06IikgewogICAgICAgIC8vIDV4NSBMRUQgbWF0cml4IGhleCDigJQgMTAgaGV4IGNoYXJzLCAyIHBlciByb3csIGJpdCBgY29sYCBzZXQgPSBMRUQgb24uCiAgICAgICAgaGFuZGxlTE0odmVyYi5zdWJzdHIoMykpCiAgICB9IGVsc2UgewogICAgICAgIGVycihzZXEsICJVTktOT1dOX1ZFUkIiKQogICAgfQp9KQoKLy8gLS0tLS0tLS0tLSBPVEhFUjoqIOKAlCB2aXNpYmxlIGZlZWRiYWNrIGZvciB0aGUgTW9yZSB0YWIgLS0tLS0tLS0tLQovLyBNYXBzIHRoZSBtb3N0IGNvbW1vbiBiaXQtcGxheWdyb3VuZCAiT3RoZXJzIiB2ZXJicyB0byBtaWNybzpiaXQKLy8gc2NyZWVuIGFjdGlvbnMgc28gdXNlcnMgc2VlIHNvbWV0aGluZyBoYXBwZW4uIEFueXRoaW5nIHdlIGRvbid0Ci8vIHJlY29nbmlzZSBzdGlsbCBnZXRzIHRoZSBPVEhFUjpBQ0sgcmVwbHkgYnkgdGhlIGNhbGxlci4KZnVuY3Rpb24gaGFuZGxlT3RoZXIocGF5bG9hZDogc3RyaW5nKSB7CiAgICAvLyBLRVk6biDigJQgc2hvdyB0aGUgZGlnaXQgb24gdGhlIDV4NSBtYXRyaXgKICAgIGlmIChwYXlsb2FkLnN1YnN0cigwLCA0KSA9PSAiS0VZOiIpIHsKICAgICAgICBsZXQgcyA9IHBheWxvYWQuc3Vic3RyKDQpCiAgICAgICAgbGV0IG4gPSBwYXJzZUludChzKQogICAgICAgIGlmICghaXNOYU4obikpIGJhc2ljLnNob3dOdW1iZXIobikKICAgICAgICBlbHNlIGJhc2ljLnNob3dTdHJpbmcocykKICAgICAgICByZXR1cm4KICAgIH0KICAgIC8vIEJUTjpQUkVTUyDigJQgc2hvdyBoZWFydAogICAgaWYgKHBheWxvYWQgPT0gIkJUTjpQUkVTUyIpIHsKICAgICAgICBiYXNpYy5zaG93SWNvbihJY29uTmFtZXMuSGVhcnQpCiAgICAgICAgcmV0dXJuCiAgICB9CiAgICAvLyBTV0lUQ0g6b24gLyBTV0lUQ0g6b2ZmIOKAlCBjaGVjayAvIHgKICAgIGlmIChwYXlsb2FkID09ICJTV0lUQ0g6b24iIHx8IHBheWxvYWQgPT0gIlNXSVRDSDoxIikgewogICAgICAgIGJhc2ljLnNob3dJY29uKEljb25OYW1lcy5ZZXMpCiAgICAgICAgcmV0dXJuCiAgICB9CiAgICBpZiAocGF5bG9hZCA9PSAiU1dJVENIOm9mZiIgfHwgcGF5bG9hZCA9PSAiU1dJVENIOjAiKSB7CiAgICAgICAgYmFzaWMuc2hvd0ljb24oSWNvbk5hbWVzLk5vKQogICAgICAgIHJldHVybgogICAgfQogICAgLy8gU0xJREVSOm4g4oCUIGJhciBmcm9tIDAuLjEwMAogICAgaWYgKHBheWxvYWQuc3Vic3RyKDAsIDcpID09ICJTTElERVI6IikgewogICAgICAgIGxldCB2ID0gcGFyc2VJbnQocGF5bG9hZC5zdWJzdHIoNykpCiAgICAgICAgaWYgKGlzTmFOKHYpKSB2ID0gMAogICAgICAgIGxldCBiYXJzID0gTWF0aC5mbG9vcih2IC8gMjApICAgICAgICAgLy8gMC4uNQogICAgICAgIGlmIChiYXJzIDwgMCkgYmFycyA9IDAKICAgICAgICBpZiAoYmFycyA+IDUpIGJhcnMgPSA1CiAgICAgICAgYmFzaWMuY2xlYXJTY3JlZW4oKQogICAgICAgIGZvciAobGV0IGMgPSAwOyBjIDwgYmFyczsgYysrKSB7CiAgICAgICAgICAgIGZvciAobGV0IHIgPSA0OyByID49IDQgLSBjOyByLS0pIGxlZC5wbG90KGMsIHIpCiAgICAgICAgfQogICAgICAgIHJldHVybgogICAgfQogICAgLy8gVEVYVDptc2cg4oCUIHNjcm9sbCBvbiB0aGUgbWF0cml4CiAgICBpZiAocGF5bG9hZC5zdWJzdHIoMCwgNSkgPT0gIlRFWFQ6IikgewogICAgICAgIGJhc2ljLnNob3dTdHJpbmcocGF5bG9hZC5zdWJzdHIoNSkpCiAgICAgICAgcmV0dXJuCiAgICB9CiAgICAvLyBKT1k6VVAvRE9XTi9MRUZUL1JJR0hUIOKAlCBhcnJvdyBpY29ucwogICAgaWYgKHBheWxvYWQgPT0gIkpPWTpVUCIpICAgIHsgYmFzaWMuc2hvd0Fycm93KEFycm93TmFtZXMuTm9ydGgpOyByZXR1cm4gfQogICAgaWYgKHBheWxvYWQgPT0gIkpPWTpET1dOIikgIHsgYmFzaWMuc2hvd0Fycm93KEFycm93TmFtZXMuU291dGgpOyByZXR1cm4gfQogICAgaWYgKHBheWxvYWQgPT0gIkpPWTpMRUZUIikgIHsgYmFzaWMuc2hvd0Fycm93KEFycm93TmFtZXMuV2VzdCk7ICByZXR1cm4gfQogICAgaWYgKHBheWxvYWQgPT0gIkpPWTpSSUdIVCIpIHsgYmFzaWMuc2hvd0Fycm93KEFycm93TmFtZXMuRWFzdCk7ICByZXR1cm4gfQp9CgovLyAtLS0tLS0tLS0tIExNOiA1eDUgTEVEIG1hdHJpeCBoZXggKGJpdC1wbGF5Z3JvdW5kIGJyaWRnZSkgLS0tLS0tLS0tLQovLyBoZXggc3RyaW5nIGlzIDEwIGNoYXJzOiA1IHJvd3MsIDIgaGV4IGNoYXJzICgxIGJ5dGUpIGVhY2guCi8vIEluIGVhY2ggcm93IGJ5dGUsIGJpdCBgY29sYCBzZXQgPSBMRUQgYXQgKHJvdywgY29sKSBpcyBvbi4KZnVuY3Rpb24gaGFuZGxlTE0oaGV4OiBzdHJpbmcpIHsKICAgIGlmIChoZXgubGVuZ3RoIDwgMTApIHJldHVybgogICAgYmFzaWMuY2xlYXJTY3JlZW4oKQogICAgZm9yIChsZXQgciA9IDA7IHIgPCA1OyByKyspIHsKICAgICAgICBsZXQgYnl0ZUhleCA9IGhleC5zdWJzdHIociAqIDIsIDIpCiAgICAgICAgbGV0IHZhbCA9IHBhcnNlSW50KGJ5dGVIZXgsIDE2KQogICAgICAgIGlmIChpc05hTih2YWwpKSB2YWwgPSAwCiAgICAgICAgZm9yIChsZXQgYyA9IDA7IGMgPCA1OyBjKyspIHsKICAgICAgICAgICAgaWYgKCh2YWwgJiAoMSA8PCBjKSkgIT0gMCkgbGVkLnBsb3QoYywgcikKICAgICAgICB9CiAgICB9CiAgICBleGVjbG9nKCJMTSAiICsgaGV4KQp9CgovLyAtLS0tLS0tLS0tIGljb24gZGlzcGF0Y2ggKGJpdC1wbGF5Z3JvdW5kIENNRDogYnJpZGdlKSAtLS0tLS0tLS0tCmZ1bmN0aW9uIGhhbmRsZUljb24obmFtZTogc3RyaW5nKSB7CiAgICBpZiAobmFtZSA9PSAiSEVBUlQiKSBiYXNpYy5zaG93SWNvbihJY29uTmFtZXMuSGVhcnQpCiAgICBlbHNlIGlmIChuYW1lID09ICJTTUlMRSIpIGJhc2ljLnNob3dJY29uKEljb25OYW1lcy5IYXBweSkKICAgIGVsc2UgaWYgKG5hbWUgPT0gIlNBRCIpIGJhc2ljLnNob3dJY29uKEljb25OYW1lcy5TYWQpCiAgICBlbHNlIGlmIChuYW1lID09ICJGSVJFIikgYmFzaWMuc2hvd0ljb24oSWNvbk5hbWVzLkZhYnVsb3VzKQogICAgZWxzZSBpZiAobmFtZSA9PSAiVVAiKSBiYXNpYy5zaG93QXJyb3coQXJyb3dOYW1lcy5Ob3J0aCkKICAgIGVsc2UgaWYgKG5hbWUgPT0gIkRPV04iKSBiYXNpYy5zaG93QXJyb3coQXJyb3dOYW1lcy5Tb3V0aCkKICAgIGVsc2UgaWYgKG5hbWUgPT0gIkxFRlQiKSBiYXNpYy5zaG93QXJyb3coQXJyb3dOYW1lcy5XZXN0KQogICAgZWxzZSBpZiAobmFtZSA9PSAiUklHSFQiKSBiYXNpYy5zaG93QXJyb3coQXJyb3dOYW1lcy5FYXN0KQogICAgZWxzZSBpZiAobmFtZSA9PSAiQ0xFQVIiKSBiYXNpYy5jbGVhclNjcmVlbigpCiAgICBleGVjbG9nKCJpY29uPSIgKyBuYW1lKQp9CgovLyAtLS0tLS0tLS0tIGFjY2VsZXJvbWV0ZXIgc3RyZWFtaW5nIC0tLS0tLS0tLS0KLy8gU2VuZHMgQUNDIGF0IHVwIHRvIH4yMCBIeiB3aGVuIG1vdmluZyAoZGVsdGEgPiBkZWFkYmFuZCksIGFuZAovLyBhdCBsZWFzdCBvbmNlIGV2ZXJ5IEhFQVJUQkVBVF9NUyBldmVuIHdoZW4gc3RhdGlvbmFyeSwgc28gdGhlCi8vIEdyYXBoIC8gM0QgdGFicyBhbHdheXMgc2hvdyBmcmVzaCBkYXRhIGluc3RlYWQgb2YgbG9va2luZyBmcm96ZW4uCmxldCBsYXN0QWNjU2VudEF0ID0gMApjb25zdCBBQ0NfSEVBUlRCRUFUX01TID0gNTAwCmJhc2ljLmZvcmV2ZXIoZnVuY3Rpb24gKCkgewogICAgaWYgKGJ0Q29ubmVjdGVkICYmIHN0cmVhbXNFbmFibGVkKSB7CiAgICAgICAgbGV0IHggPSBpbnB1dC5hY2NlbGVyYXRpb24oRGltZW5zaW9uLlgpCiAgICAgICAgbGV0IHkgPSBpbnB1dC5hY2NlbGVyYXRpb24oRGltZW5zaW9uLlkpCiAgICAgICAgbGV0IHogPSBpbnB1dC5hY2NlbGVyYXRpb24oRGltZW5zaW9uLlopCiAgICAgICAgbGV0IGR4ID0gTWF0aC5hYnMoeCAtIGxhc3RBY2NbMF0pCiAgICAgICAgbGV0IGR5ID0gTWF0aC5hYnMoeSAtIGxhc3RBY2NbMV0pCiAgICAgICAgbGV0IGR6ID0gTWF0aC5hYnMoeiAtIGxhc3RBY2NbMl0pCiAgICAgICAgbGV0IG5vdyA9IGlucHV0LnJ1bm5pbmdUaW1lKCkKICAgICAgICBsZXQgbW92ZWQgPSAoZHggPiBhY2NEZWFkYmFuZCB8fCBkeSA+IGFjY0RlYWRiYW5kIHx8IGR6ID4gYWNjRGVhZGJhbmQpCiAgICAgICAgbGV0IHN0YWxlID0gKG5vdyAtIGxhc3RBY2NTZW50QXQpID49IEFDQ19IRUFSVEJFQVRfTVMKICAgICAgICBpZiAobW92ZWQgfHwgc3RhbGUpIHsKICAgICAgICAgICAgbGFzdEFjYyA9IFt4LCB5LCB6XQogICAgICAgICAgICBsYXN0QWNjU2VudEF0ID0gbm93CiAgICAgICAgICAgIHNlbmQoIkFDQzoiICsgeCArICIsIiArIHkgKyAiLCIgKyB6KQogICAgICAgIH0KICAgIH0KICAgIGJhc2ljLnBhdXNlKDUwKQp9KQoKLy8gLS0tLS0tLS0tLSB0ZW1wZXJhdHVyZSBzdHJlYW1pbmcgKH4xIEh6LCBvbiBjaGFuZ2UpIC0tLS0tLS0tLS0KbGV0IGxhc3RUZW1wID0gLTk5OQpiYXNpYy5mb3JldmVyKGZ1bmN0aW9uICgpIHsKICAgIGlmIChidENvbm5lY3RlZCAmJiBzdHJlYW1zRW5hYmxlZCkgewogICAgICAgIGxldCB0ID0gaW5wdXQudGVtcGVyYXR1cmUoKQogICAgICAgIGlmICh0ICE9IGxhc3RUZW1wKSB7CiAgICAgICAgICAgIGxhc3RUZW1wID0gdAogICAgICAgICAgICBzZW5kKCJURU1QOiIgKyB0KQogICAgICAgIH0KICAgIH0KICAgIGJhc2ljLnBhdXNlKDEwMDApCn0pCgovLyAtLS0tLS0tLS0tIHNvdW5kIHN0cmVhbWluZyAoVjIgb25seSkgLS0tLS0tLS0tLQovLyBWMiBtaWNybzpiaXRzIGV4cG9zZSBpbnB1dC5zb3VuZExldmVsKCkuIE9uIFYxLCB0aGlzIGNhbGwgZG9lc24ndAovLyBleGlzdCBhbmQgTWFrZUNvZGUgdXNlZCB0byBhc3NlcnQgYXQgY29tcGlsZSB0aW1lIHdoZW4gdGhlIHRhcmdldAovLyB2ZXJzaW9uIHJlc29sdXRpb24gZHJpZnRlZCDigJQgYnV0IGZvciB0aGUgdjAuMS54IGxpbmUgd2UncmUgbG9ja2VkCi8vIHRvIFYyIChNYXF1ZWVuIExpdGUgdjQgc2hpcHMgd2l0aCBWMiBib2FyZHMpLCBzbyB0aGlzIGNvbXBpbGVzLgovLyBIZWFydGJlYXQgcGF0dGVybiBtYXRjaGVzIEFDQzogc2VuZCBpZiBkZWx0YSA+IGRlYWRiYW5kIE9SIGV2ZXJ5IDc1MCBtcy4KbGV0IGxhc3RTb3VuZCA9IDAKbGV0IGxhc3RTb3VuZFNlbnRBdCA9IDAKY29uc3QgU09VTkRfREVBREJBTkQgPSA0CmNvbnN0IFNPVU5EX0hFQVJUQkVBVF9NUyA9IDc1MApiYXNpYy5mb3JldmVyKGZ1bmN0aW9uICgpIHsKICAgIGlmIChidENvbm5lY3RlZCAmJiBzdHJlYW1zRW5hYmxlZCkgewogICAgICAgIGxldCBzID0gaW5wdXQuc291bmRMZXZlbCgpCiAgICAgICAgbGV0IG5vdyA9IGlucHV0LnJ1bm5pbmdUaW1lKCkKICAgICAgICBsZXQgbW92ZWQgPSBNYXRoLmFicyhzIC0gbGFzdFNvdW5kKSA+IFNPVU5EX0RFQURCQU5ECiAgICAgICAgbGV0IHN0YWxlID0gKG5vdyAtIGxhc3RTb3VuZFNlbnRBdCkgPj0gU09VTkRfSEVBUlRCRUFUX01TCiAgICAgICAgaWYgKG1vdmVkIHx8IHN0YWxlKSB7CiAgICAgICAgICAgIGxhc3RTb3VuZCA9IHMKICAgICAgICAgICAgbGFzdFNvdW5kU2VudEF0ID0gbm93CiAgICAgICAgICAgIHNlbmQoIlNPVU5EOiIgKyBzKQogICAgICAgIH0KICAgIH0KICAgIGJhc2ljLnBhdXNlKDE1MCkKfSkKCi8vIC0tLS0tLS0tLS0gbGlnaHQgc3RyZWFtaW5nICh+MyBIeiwgb24gY2hhbmdlKSAtLS0tLS0tLS0tCi8vIENSSVRJQ0FMOiBkbyBOT1QgY2FsbCBpbnB1dC5jb21wYXNzSGVhZGluZygpIGluIGFueSBhdXRvLWxvb3AuCi8vIEluIENPREFMIC8gcHh0LW1pY3JvYml0LCB0aGUgRklSU1QgY2FsbCB0byBjb21wYXNzSGVhZGluZygpIG9uIGFuCi8vIHVuY2FsaWJyYXRlZCBjb21wYXNzIGF1dG8tdHJpZ2dlcnMgdGhlIHRpbHQtZ2FtZSBjYWxpYnJhdGlvbiwgd2hpY2gKLy8gQkxPQ0tTIHRoZSBjYWxsaW5nIGZpYmVyIGZvciB+MzAgc2Vjb25kcy4gU2luY2UgdGhpcyBsb29wIHJ1bnMgaW4KLy8gdGhlIHNhbWUgZmliZXIgY29udGV4dCBhcyB0aGUgQkxFIGhhbmRsZXIgcmVzb3VyY2VzLCB0aGF0IGJsb2NrCi8vIGxvb2tzIGlkZW50aWNhbCB0byBhIGRlYWQgZmlybXdhcmU6IGNvbm5lY3Qgc3VjY2VlZHMsIGJ1dCBldmVyeQovLyBjb21tYW5kIHRpbWVzIG91dCB3aXRob3V0IGFuIGVjaG8uCi8vCi8vIHNvdW5kTGV2ZWwgKyBvbkxvZ29FdmVudCBhcmUgVjItb25seSDigJQgdGhleSBzb21ldGltZXMgdHJpZ2dlcgovLyBNYWtlQ29kZSdzICchIXByb2MgfHwgIWJpbi5maW5hbFBhc3MnIGFzc2VydGlvbiB3aGVuIHRhcmdldCB2ZXJzaW9uCi8vIHJlc29sdXRpb24gZHJpZnRzLiBBbHNvIHJlbW92ZWQgZm9yIHN0YWJpbGl0eS4KLy8KLy8gVG8gZ2V0IGEgY29tcGFzcyByZWFkaW5nLCB1c2UgdGhlIENBTDpDT01QQVNTIHZlcmIgKHdoaWNoIGNhbiBvcHQKLy8gdGhlIHVzZXIgaW50byBjYWxpYnJhdGlvbiBvbiBkZW1hbmQpIG9yIGV4cG9zZSBhIENPTVBBU1M/IHF1ZXJ5Ci8vIHRoYXQgY2FsbHMgY29tcGFzc0hlYWRpbmcoKSBvbmx5IGFmdGVyIGEgdXNlciBnZXN0dXJlIGNvbmZpcm1zCi8vIHRoZXkncmUgcmVhZHkgdG8gZG8gdGhlIHRpbHQtZ2FtZS4KbGV0IGxhc3RMaWdodCA9IC0xCmxldCBsYXN0TGlnaHRTZW50QXQgPSAwCmNvbnN0IExJR0hUX0RFQURCQU5EID0gNApjb25zdCBMSUdIVF9IRUFSVEJFQVRfTVMgPSAxMDAwCmJhc2ljLmZvcmV2ZXIoZnVuY3Rpb24gKCkgewogICAgaWYgKGJ0Q29ubmVjdGVkICYmIHN0cmVhbXNFbmFibGVkKSB7CiAgICAgICAgbGV0IGwgPSBpbnB1dC5saWdodExldmVsKCkKICAgICAgICBsZXQgbm93ID0gaW5wdXQucnVubmluZ1RpbWUoKQogICAgICAgIGxldCBtb3ZlZCA9IE1hdGguYWJzKGwgLSBsYXN0TGlnaHQpID4gTElHSFRfREVBREJBTkQKICAgICAgICBsZXQgc3RhbGUgPSAobm93IC0gbGFzdExpZ2h0U2VudEF0KSA+PSBMSUdIVF9IRUFSVEJFQVRfTVMKICAgICAgICBpZiAobW92ZWQgfHwgc3RhbGUpIHsKICAgICAgICAgICAgbGFzdExpZ2h0ID0gbAogICAgICAgICAgICBsYXN0TGlnaHRTZW50QXQgPSBub3cKICAgICAgICAgICAgc2VuZCgiTElHSFQ6IiArIGwpCiAgICAgICAgfQogICAgfQogICAgYmFzaWMucGF1c2UoMzAwKQp9KQoKLy8gLS0tLS0tLS0tLSBidXR0b25zIChwb2xsIGZvciBwcmVzcy9yZWxlYXNlOyBvbkJ1dHRvblJlbGVhc2VkIGlzIG5vdCBpbiBweHQtbWljcm9iaXQpIC0tLS0tLS0tLS0KbGV0IGxhc3RCdG5BID0gZmFsc2UKbGV0IGxhc3RCdG5CID0gZmFsc2UKYmFzaWMuZm9yZXZlcihmdW5jdGlvbiAoKSB7CiAgICBpZiAoYnRDb25uZWN0ZWQgJiYgc3RyZWFtc0VuYWJsZWQpIHsKICAgICAgICBsZXQgYSA9IGlucHV0LmJ1dHRvbklzUHJlc3NlZChCdXR0b24uQSkKICAgICAgICBsZXQgYiA9IGlucHV0LmJ1dHRvbklzUHJlc3NlZChCdXR0b24uQikKICAgICAgICBpZiAoYSAhPSBsYXN0QnRuQSkgewogICAgICAgICAgICBsYXN0QnRuQSA9IGEKICAgICAgICAgICAgc2VuZCgiQlROOkE6IiArIChhID8gMSA6IDApKQogICAgICAgIH0KICAgICAgICBpZiAoYiAhPSBsYXN0QnRuQikgewogICAgICAgICAgICBsYXN0QnRuQiA9IGIKICAgICAgICAgICAgc2VuZCgiQlROOkI6IiArIChiID8gMSA6IDApKQogICAgICAgIH0KICAgIH0KICAgIGJhc2ljLnBhdXNlKDUwKQp9KQoKLy8gLS0tLS0tLS0tLSBzdGFydCAtLS0tLS0tLS0tCi8vIE9ubHkgc3RhcnQgVUFSVCDigJQgYWNjZWxlcm9tZXRlci90ZW1wL2V0Yy4gYXJlIHN0cmVhbWVkIG1hbnVhbGx5IHZpYQovLyB1YXJ0V3JpdGVMaW5lLCBubyBuZWVkIGZvciB0aGUgaGVhdnl3ZWlnaHQgQkxFIGNoYXJhY3RlcmlzdGljIHNlcnZpY2VzCi8vICh3aGljaCBjb21wb3VuZCB3aXRoIG1hcXVlZW4gKyBtaWNyb3Bob25lICsgSVIgbGlicyB0byBvdmVyZmxvdwovLyBtaWNybzpiaXQgVjEncyBSQU0gYW5kIHRyaWdnZXIgTWFrZUNvZGUncyAnISFwcm9jIHx8ICFiaW4uZmluYWxQYXNzJwovLyBhc3NlcnRpb24pLgpibHVldG9vdGguc3RhcnRVYXJ0U2VydmljZSgpCmJhc2ljLnNob3dJY29uKEljb25OYW1lcy5ObykKc2V0dXBJUigpCmJvb3RCYW5uZXIoKQo=</script>
+    </div>
+</div>
+
+<!-- Keyboard Shortcuts Overlay (press K to toggle) -->
+<div id="shortcutsOverlay" class="overlay">
+    <div class="overlay-card">
+        <div class="overlay-title" data-i18n="shortcuts_title">⌨️ Keyboard Shortcuts</div>
+        <div class="shortcut-grid">
+            <div class="shortcut-row"><kbd>Space</kbd> <span data-i18n="shortcut_connect">Connect / Disconnect</span></div>
+            <div class="shortcut-row"><kbd>1</kbd>–<kbd>8</kbd> <span data-i18n="shortcut_tabs">Switch tabs</span></div>
+            <div class="shortcut-row"><kbd>P</kbd> <span data-i18n="shortcut_pause">Pause / Resume graph</span></div>
+            <div class="shortcut-row"><kbd>F</kbd> <span data-i18n="shortcut_fullscreen">Fullscreen graph</span></div>
+            <div class="shortcut-row"><kbd>K</kbd> <span data-i18n="shortcut_help">Toggle this help</span></div>
+            <div class="shortcut-row"><kbd>Esc</kbd> <span data-i18n="shortcut_close">Close overlays</span></div>
+        </div>
+        <button class="secondary" onclick="this.closest('.overlay').classList.remove('visible')" data-i18n="close">Close</button>
+    </div>
+</div>
+
+<!-- Onboarding Overlay (first visit) -->
+<div id="onboardingOverlay" class="overlay">
+    <div class="overlay-card onboarding-card">
+        <div class="overlay-title" data-i18n="welcome">🤖 Welcome to Maqueen Lab!</div>
+        <div class="onboarding-steps">
+            <div class="ob-step"><span class="ob-num">1</span> <span data-i18n="ob_step1">Power on your Maqueen Lite v4 (micro:bit inside)</span></div>
+            <div class="ob-step"><span class="ob-num">2</span> <span data-i18n="ob_step2">Click Connect and pair with the micro:bit</span></div>
+            <div class="ob-step"><span class="ob-num">3</span> <span data-i18n="ob_step3">Explore tabs: Drive, Sensors, Servos, Lights, Buzzer</span></div>
+            <div class="ob-step"><span class="ob-num">4</span> <span data-i18n="ob_step4">🤖 Tap the robot icon up top to meet your robot's parts</span></div>
+        </div>
+        <button class="primary" id="onboardingDismiss" data-i18n="lets_go">Let's Go! 🎮</button>
+    </div>
+</div>
+
+<script>
+// Clear cache / reset button
+document.getElementById('clearCacheBtn')?.addEventListener('click', () => {
+    if (!confirm('Clear all saved settings and reload?')) return;
+    // Clear all app localStorage keys
+    ['mb_theme','mb_active_tab','mb_graph_sensors','mb_onboarded','mb_calibration',
+     'mb_servo1_trim','mb_servo2_trim','mb_board3d_model','mb_other_presets','mb_lang'
+    ].forEach(k => localStorage.removeItem(k));
+    // Unregister service workers and clear caches
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(regs => regs.forEach(r => r.unregister()));
+    }
+    caches.keys().then(keys => keys.forEach(k => caches.delete(k)));
+    // Reload
+    setTimeout(() => window.location.reload(true), 300);
+});
+
+// Firmware overlay
+(function() {
+    const btn = document.getElementById('firmwareBtn');
+    const overlay = document.getElementById('firmwareOverlay');
+    const codeEl = document.getElementById('firmwareCode');
+    const copyBtn = document.getElementById('firmwareCopyBtn');
+    const closeBtn = document.getElementById('firmwareCloseBtn');
+    const sourceEl = document.getElementById('firmwareSource');
+    let codeLoaded = false;
+
+    function loadCode() {
+        if (codeLoaded) return;
+        // Try embedded base64 source first (works on file://)
+        if (sourceEl && sourceEl.textContent.trim().length > 10) {
+            try {
+                // UTF-8 safe base64 decode (handles em-dashes, non-ASCII)
+                const b64 = sourceEl.textContent.trim();
+                const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+                const text = new TextDecoder('utf-8').decode(bytes);
+                codeEl.textContent = text;
+                codeLoaded = true;
+                // Extract BUILD_VERSION + BUILD_DATE for the stamp line
+                const vm = text.match(/const\s+BUILD_VERSION\s*=\s*"([^"]+)"/);
+                const dm = text.match(/const\s+BUILD_DATE\s*=\s*"([^"]+)"/);
+                const v = document.getElementById('fwStampVersion');
+                const d = document.getElementById('fwStampDate');
+                if (v && vm) v.textContent = 'v' + vm[1];
+                if (d && dm) d.textContent = dm[1];
+                return;
+            } catch(e) {}
+        }
+        // Fallback: fetch (works on http://)
+        fetch('firmware/v1-maqueen-lib.ts')
+            .then(r => r.text())
+            .then(code => { codeEl.textContent = code; codeLoaded = true; })
+            .catch(() => {
+                codeEl.textContent = '// Could not load firmware code.\n// Open this page via a local web server (e.g. python3 -m http.server)';
+            });
+    }
+
+    if (btn && overlay) {
+        btn.addEventListener('click', () => { overlay.classList.add('visible'); loadCode(); });
+        closeBtn?.addEventListener('click', () => overlay.classList.remove('visible'));
+
+        copyBtn?.addEventListener('click', () => {
+            const code = codeEl.textContent;
+            navigator.clipboard.writeText(code).then(() => {
+                copyBtn.textContent = 'Copied!';
+                setTimeout(() => { copyBtn.textContent = 'Copy Code'; }, 2000);
+            }).catch(() => {
+                const ta = document.createElement('textarea');
+                ta.value = code;
+                ta.style.position = 'fixed';
+                ta.style.opacity = '0';
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand('copy');
+                document.body.removeChild(ta);
+                copyBtn.textContent = 'Copied!';
+                setTimeout(() => { copyBtn.textContent = 'Copy Code'; }, 2000);
+            });
+        });
+    }
+})();
+
+// Onboarding: show only on first visit
+(function() {
+    try {
+        if (!localStorage.getItem('mb_onboarded')) {
+            document.getElementById('onboardingOverlay')?.classList.add('visible');
+            document.getElementById('onboardingDismiss')?.addEventListener('click', () => {
+                document.getElementById('onboardingOverlay')?.classList.remove('visible');
+                localStorage.setItem('mb_onboarded', '1');
+            });
+        }
+    } catch {}
+})();
+// Register service worker for PWA
+if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+</script>
+
+</body>
+</html>

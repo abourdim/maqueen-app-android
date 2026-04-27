@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Maqueen Lab — User Guide</title>
+<style>
+  :root {
+    --bg: #0a1628;
+    --bg-elev: #0f1e35;
+    --bg-card: #122844;
+    --border: #1d3556;
+    --text: #fff;
+    --text-dim: #b8c8e0;
+    --accent: #00d4ff;
+    --accent-glow: #00d4ff77;
+    --green: #4ade80;
+    --amber: #fbbf24;
+    --red: #f87171;
+    --pink: #f472b6;
+    --orange: #fb923c;
+    --purple: #c084fc;
+    --yellow: #facc15;
+    --mono: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    background: radial-gradient(ellipse at top, #1a3a5e 0%, var(--bg) 60%);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+    line-height: 1.55;
+    font-size: 15px;
+    min-height: 100vh;
+  }
+  body { max-width: 1100px; margin: 0 auto; padding: 32px 24px 64px; }
+
+  /* =========== HERO =========== */
+  .hero {
+    text-align: center;
+    padding: 48px 16px 56px;
+    margin-bottom: 32px;
+  }
+  .hero h1 {
+    font-size: 52px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    margin: 0 0 12px;
+    background: linear-gradient(135deg, #fff, var(--accent), var(--pink));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    text-shadow: 0 4px 20px rgba(0, 212, 255, 0.25);
+  }
+  .hero .pitch { font-size: 19px; color: var(--text-dim); max-width: 640px; margin: 0 auto 28px; line-height: 1.5; }
+  .cta-row { display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--accent); color: var(--bg);
+    padding: 12px 24px; border-radius: 999px;
+    font-weight: 700; font-size: 15px;
+    text-decoration: none;
+    transition: transform 0.1s, box-shadow 0.15s;
+  }
+  .btn:hover { transform: scale(1.04); box-shadow: 0 0 24px var(--accent-glow); }
+  .btn.secondary { background: var(--bg-card); color: var(--accent); border: 2px solid var(--accent); }
+  .btn.ghost { background: transparent; color: var(--text-dim); border: 1px solid var(--border); }
+  .btn.ghost:hover { color: var(--accent); border-color: var(--accent); }
+
+  /* =========== SECTION HEADERS =========== */
+  h2 {
+    font-size: 30px; margin: 64px 0 8px; letter-spacing: -0.01em;
+    display: flex; align-items: center; gap: 12px;
+  }
+  .section-sub { color: var(--text-dim); margin: 0 0 24px; font-size: 16px; }
+
+  /* =========== STEPS =========== */
+  .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+  .step {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 14px; padding: 24px; position: relative;
+    transition: transform 0.15s, border-color 0.15s;
+  }
+  .step:hover { transform: translateY(-3px); border-color: var(--accent); }
+  .step .num {
+    position: absolute; top: -14px; left: 20px;
+    width: 32px; height: 32px; border-radius: 50%;
+    background: var(--accent); color: var(--bg);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 800; font-size: 15px;
+    box-shadow: 0 0 12px var(--accent-glow);
+  }
+  .step h3 { margin: 8px 0 8px; font-size: 18px; color: var(--accent); }
+  .step p { margin: 6px 0; color: var(--text-dim); font-size: 14px; }
+  .step code { background: #061121; padding: 2px 8px; border-radius: 4px; color: var(--accent); font-family: var(--mono); font-size: 12px; }
+
+  /* =========== FEATURE CARDS =========== */
+  .grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 14px; margin: 16px 0;
+  }
+  .card {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 12px; padding: 18px;
+    transition: transform 0.15s, border-color 0.15s;
+  }
+  .card:hover { transform: translateY(-2px); border-color: var(--accent); }
+  .card .icon { font-size: 32px; display: block; margin-bottom: 8px; }
+  .card h3 { margin: 0 0 6px; font-size: 16px; color: var(--text); }
+  .card p { margin: 0; color: var(--text-dim); font-size: 13.5px; line-height: 1.5; }
+  .card.pink:hover { border-color: var(--pink); }
+  .card.orange:hover { border-color: var(--orange); }
+  .card.green:hover { border-color: var(--green); }
+  .card.yellow:hover { border-color: var(--yellow); }
+  .card.cyan:hover { border-color: var(--accent); }
+  .card.purple:hover { border-color: var(--purple); }
+
+  /* =========== KIT CARDS =========== */
+  .kit-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
+  .kit {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 12px; padding: 18px;
+    text-decoration: none; color: var(--text);
+    transition: transform 0.15s, border-color 0.15s;
+    display: block;
+  }
+  .kit:hover { transform: translateY(-2px); border-color: var(--accent); }
+  .kit .emoji { font-size: 40px; display: block; margin-bottom: 6px; }
+  .kit .name { font-weight: 700; font-size: 15px; }
+  .kit .id { font-family: var(--mono); font-size: 11px; color: var(--text-dim); margin-top: 4px; }
+  .kit .roles { font-size: 12.5px; color: var(--text-dim); margin-top: 8px; }
+  .kit .roles strong { color: var(--accent); }
+
+  /* =========== RESOURCE LINKS =========== */
+  .res-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin: 16px 0; }
+  .res {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 10px; padding: 14px 16px;
+    text-decoration: none; color: var(--text);
+    display: flex; align-items: center; gap: 12px;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .res:hover { border-color: var(--accent); background: rgba(0, 212, 255, 0.04); }
+  .res .res-icon { font-size: 22px; }
+  .res .res-text { font-size: 13.5px; line-height: 1.3; }
+  .res .res-text strong { display: block; font-size: 14px; color: var(--accent); }
+
+  /* =========== FAQ =========== */
+  details {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 10px; padding: 14px 18px; margin: 8px 0;
+    transition: border-color 0.15s;
+  }
+  details[open] { border-color: var(--accent); }
+  details summary {
+    cursor: pointer; font-weight: 600; color: var(--text);
+    list-style: none; display: flex; align-items: center; gap: 10px;
+    font-size: 15px;
+  }
+  details summary::after { content: '▸'; margin-left: auto; transition: transform 0.15s; color: var(--accent); }
+  details[open] summary::after { transform: rotate(90deg); }
+  details .body { margin-top: 12px; color: var(--text-dim); font-size: 14px; line-height: 1.6; }
+  details .body code { background: #061121; padding: 2px 6px; border-radius: 4px; color: var(--accent); font-family: var(--mono); font-size: 12px; }
+  details .body pre {
+    background: #061121; border-left: 3px solid var(--accent);
+    padding: 12px 16px; border-radius: 6px; margin: 10px 0;
+    overflow-x: auto; font-size: 12.5px; font-family: var(--mono);
+  }
+  details .body a { color: var(--accent); }
+
+  /* =========== CALLOUT =========== */
+  .callout {
+    background: linear-gradient(90deg, rgba(0,212,255,0.08), rgba(244,114,182,0.05));
+    border: 1px solid rgba(0,212,255,0.3); border-radius: 14px;
+    padding: 20px 24px; margin: 24px 0;
+    display: flex; align-items: flex-start; gap: 16px;
+  }
+  .callout .c-icon { font-size: 32px; line-height: 1; }
+  .callout .c-body { flex: 1; }
+  .callout h3 { margin: 0 0 6px; font-size: 16px; color: var(--accent); }
+  .callout p { margin: 4px 0; color: var(--text-dim); font-size: 14px; }
+  .callout.warn { border-color: rgba(251, 191, 36, 0.4); background: linear-gradient(90deg, rgba(251,191,36,0.08), rgba(251,146,60,0.05)); }
+  .callout.warn h3 { color: var(--amber); }
+
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-shadow: 0 0 6px var(--accent-glow); }
+
+  footer.guide-footer {
+    margin-top: 64px; padding-top: 24px; text-align: center;
+    border-top: 1px solid var(--border); color: var(--text-dim); font-size: 14px;
+  }
+  footer.guide-footer a { color: var(--accent); padding: 0 10px; }
+
+  /* mini robot illustration */
+  .mini-robot { width: 220px; height: 140px; display: block; margin: 0 auto 24px; }
+</style>
+</head>
+<body>
+
+<!-- ============== HERO ============== -->
+<section class="hero">
+  <svg class="mini-robot" viewBox="0 0 220 140" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <radialGradient id="halo"><stop offset="0%" stop-color="#00d4ff" stop-opacity="0.5"/><stop offset="100%" stop-color="#00d4ff" stop-opacity="0"/></radialGradient>
+    </defs>
+    <ellipse cx="110" cy="80" rx="80" ry="20" fill="url(#halo)"/>
+    <!-- chassis -->
+    <rect x="50" y="36" width="120" height="70" rx="14" fill="#1e3a8a" stroke="#00d4ff" stroke-width="2"/>
+    <!-- screen with smile -->
+    <rect x="80" y="50" width="60" height="42" rx="6" fill="#0a1628" stroke="#00d4ff"/>
+    <circle cx="96" cy="66" r="3" fill="#fbbf24"/><circle cx="124" cy="66" r="3" fill="#fbbf24"/>
+    <path d="M 92 78 Q 110 88 128 78" stroke="#fbbf24" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+    <!-- wheels -->
+    <circle cx="42" cy="100" r="14" fill="#1f2937" stroke="#fff" stroke-width="2"/>
+    <circle cx="42" cy="100" r="6" fill="#5a6068"/>
+    <circle cx="178" cy="100" r="14" fill="#1f2937" stroke="#fff" stroke-width="2"/>
+    <circle cx="178" cy="100" r="6" fill="#5a6068"/>
+    <!-- ultrasonic eyes (front) -->
+    <circle cx="92" cy="36" r="4" fill="#9ca3af" stroke="#fff" stroke-width="0.8"/>
+    <circle cx="128" cy="36" r="4" fill="#9ca3af" stroke="#fff" stroke-width="0.8"/>
+  </svg>
+  <h1>Maqueen Lab</h1>
+  <p class="pitch">A web-based BLE component lab for the DFRobot Maqueen Lite v4 — every actuator and sensor, live in your browser.</p>
+  <div class="cta-row">
+    <a class="btn" href="index.html">▶ Open the app</a>
+    <a class="btn secondary" href="schematics-kids.html">🤖 Meet your robot</a>
+    <a class="btn ghost" href="https://github.com/abourdim/maqueen-app">⭐ GitHub</a>
+  </div>
+</section>
+
+<!-- ============== QUICK START ============== -->
+<h2>🚀 Get going in 3 minutes</h2>
+<p class="section-sub">Flash the firmware, pair over Bluetooth, hit a button.</p>
+<div class="steps">
+  <div class="step">
+    <div class="num">1</div>
+    <h3>Flash the firmware</h3>
+    <p>Open <a href="https://makecode.microbit.org" target="_blank">makecode.microbit.org</a>, add the <code>pxt-maqueen</code> extension, paste the code from the app's <strong>🤖 Firmware</strong> button, download the <code>.hex</code> to your micro:bit.</p>
+  </div>
+  <div class="step">
+    <div class="num">2</div>
+    <h3>Connect</h3>
+    <p>Power the robot. Open Maqueen Lab in <strong>Chrome / Edge</strong>. Click <strong>Connect</strong> and pick <code>BBC micro:bit [xxxxx]</code>.</p>
+  </div>
+  <div class="step">
+    <div class="num">3</div>
+    <h3>Play</h3>
+    <p>Land on the <strong>🤖 Maqueen tab</strong>. Tap a direction, drag a slider, pick a color. Watch the live sensor strip up top react. Switch to the <strong>🧪 Playground tab</strong> for the legacy bit-playground sub-tabs (Controls, Sensors, Graph, 3D, Bench, More).</p>
+  </div>
+</div>
+
+<div class="callout">
+  <div class="c-icon">🗂️</div>
+  <div class="c-body">
+    <h3>Two top tabs</h3>
+    <p><strong>🤖 Maqueen</strong> — the real-robot UI: cards for Drive, Servos, Simple LEDs, NeoPixels, Buzzer, Ultrasonic, IR remote, Line sensors (with Follow-line auto mode tucked inside).</p>
+    <p><strong>🧪 Playground</strong> — collapsible group of legacy bit-playground sub-tabs (Controls, Sensors, Graph, 3D, Bench, More). Free-form micro:bit experiments that don't depend on Maqueen hardware.</p>
+  </div>
+</div>
+
+<!-- ============== WHAT YOU CAN DO ============== -->
+<h2>✨ What you can do</h2>
+<p class="section-sub">Cards in the Maqueen tab, each driving a real piece of the robot. A live sensor strip across the top shows LINE / DIST / IR / ACC plus the BLE bench (sent · echoed · lost · avg ms) and a <code>streams: ON/OFF</code> chip.</p>
+<div class="grid">
+  <div class="card orange">
+    <span class="icon">🛞</span>
+    <h3>Drive the wheels</h3>
+    <p>Direction pad + speed slider. Drag while moving — speed updates instantly. Flip <strong>Hold to drive</strong> on if you want release-to-stop.</p>
+  </div>
+  <div class="card cyan">
+    <span class="icon">🦾</span>
+    <h3>Pose the servos</h3>
+    <p>Two sliders, three presets. Pick a Mechanic Kit (Forklift / Loader / Beetle / Push) and the panel relabels itself with kit-specific roles.</p>
+  </div>
+  <div class="card yellow">
+    <span class="icon">💡</span>
+    <h3>Toggle the LEDs</h3>
+    <p>Two simple LEDs (left/right), toggle, blink-5×, all off.</p>
+  </div>
+  <div class="card pink">
+    <span class="icon">🌈</span>
+    <h3>Paint with NeoPixels</h3>
+    <p>Four addressable RGB pixels. Per-pixel colors or a rolling rainbow animation.</p>
+  </div>
+  <div class="card yellow">
+    <span class="icon">🔊</span>
+    <h3>Play music</h3>
+    <p>Piano-key notes (C–B), or any frequency + duration you type.</p>
+  </div>
+  <div class="card green">
+    <span class="icon">📏</span>
+    <h3>Ultrasonic distance</h3>
+    <p>One-shot ping or auto-poll (200–2000 ms slider). When nothing's in front, the strip shows <code>DIST:-</code> instead of a bogus 500.</p>
+  </div>
+  <div class="card cyan">
+    <span class="icon">📺</span>
+    <h3>IR remote</h3>
+    <p>Last-pressed button echoes onto the strip. Works with the IR remote that ships with the Maqueen.</p>
+  </div>
+  <div class="card purple">
+    <span class="icon">🛤️</span>
+    <h3>Line sensors + Follow-line</h3>
+    <p>Live L/R eye dots — and the Follow-line auto mode now lives inside this card. Tick rate slider 100–1000 ms.</p>
+  </div>
+</div>
+
+<div class="callout">
+  <div class="c-icon">⚡</div>
+  <div class="c-body">
+    <h3>Auto-pollers + stream control, made polite</h3>
+    <p>DIST and LINE auto-poll at a rate you pick (200–2000 ms, persisted in localStorage). They <strong>pause when you leave the Maqueen tab</strong> so the BLE channel stays clear for whatever you're doing in the Playground tab.</p>
+    <p>The ACC / LIGHT / SOUND streams are <strong>off by default</strong> — toggle the <code>streams: ON/OFF</code> chip in the live strip, or just enter the Sensors / Graph / 3D sub-tab and they auto-arm. Each stream emits a heartbeat every ~500–1000 ms even when the value hasn't changed, so the Graph never looks frozen.</p>
+  </div>
+</div>
+
+<!-- ============== THE BLE LAYER ============== -->
+<div class="callout">
+  <div class="c-icon">📡</div>
+  <div class="c-body">
+    <h3>Every command is echo-confirmed</h3>
+    <p>Each button press sends a sequence-numbered verb (<code>#42 SRV:1,90</code>). The micro:bit replies <code>ECHO:42 SRV:1,90</code>. The bench display in the live strip shows sent / echoed / lost / average round-trip — so you always know if BLE dropped a packet.</p>
+    <p>Under the hood: a single global write serializer awaits each <code>writeValue()</code> Promise — no more <code>NetworkError: GATT operation already in progress</code>. Pending sends are rejected immediately on disconnect (no silent hangs), and a fresh <code>HELLO</code> on connect prints the firmware version on the Connect card.</p>
+  </div>
+</div>
+
+<!-- ============== KITS ============== -->
+<h2>🔧 Mechanic Kits</h2>
+<p class="section-sub">Pick a kit from the dropdown — the Servos panel relabels itself with kit-specific roles + presets.</p>
+<div class="kit-grid">
+  <div class="kit">
+    <span class="emoji">🍴</span>
+    <div class="name">Forklift</div>
+    <div class="id">ROB0156-F</div>
+    <div class="roles">S1 = <strong>Lift</strong> · S2 = <strong>Tilt</strong><br/>presets: Down · Carry · Lift</div>
+    <div class="roles" style="margin-top:8px; font-size:11px;">
+      <a href="https://www.dfrobot.com/product-2129.html" target="_blank">🛒 Store</a> ·
+      <a href="https://wiki.dfrobot.com/Maqueen_Mechanic_Forklift_SKU_ROB0156-F" target="_blank">📖 Wiki</a>
+    </div>
+  </div>
+  <div class="kit">
+    <span class="emoji">🚜</span>
+    <div class="name">Loader</div>
+    <div class="id">ROB0156-L</div>
+    <div class="roles">S1 = <strong>Arm</strong> · S2 = <strong>Bucket</strong><br/>presets: Scoop · Carry · Dump</div>
+    <div class="roles" style="margin-top:8px; font-size:11px;">
+      <a href="https://www.dfrobot.com/product-2006.html" target="_blank">🛒 Store</a> ·
+      <a href="https://wiki.dfrobot.com/Maqueen_Mechanic_Loader_SKU_ROB0156-L" target="_blank">📖 Wiki</a>
+    </div>
+  </div>
+  <div class="kit">
+    <span class="emoji">🪲</span>
+    <div class="name">Beetle gripper</div>
+    <div class="id">ROB0156-B</div>
+    <div class="roles">S1 = <strong>Arm</strong> · S2 = <strong>Grip</strong><br/>presets: Open · Close · Lift</div>
+    <div class="roles" style="margin-top:8px; font-size:11px;">
+      <a href="https://www.dfrobot.com/product-2128.html" target="_blank">🛒 Store</a> ·
+      <a href="https://wiki.dfrobot.com/Maqueen_Mechanic_Beetle_SKU_ROB0156-B" target="_blank">📖 Wiki</a>
+    </div>
+  </div>
+  <div class="kit">
+    <span class="emoji">🛻</span>
+    <div class="name">Push / bulldozer</div>
+    <div class="id">ROB0156-P</div>
+    <div class="roles">S1 = <strong>Blade</strong><br/>presets: Down · Mid · Up</div>
+    <div class="roles" style="margin-top:8px; font-size:11px;">
+      <a href="https://www.dfrobot.com/product-2127.html" target="_blank">🛒 Store</a> ·
+      <a href="https://wiki.dfrobot.com/Maqueen_Mechanic_Push_SKU_ROB0156-P" target="_blank">📖 Wiki</a>
+    </div>
+  </div>
+</div>
+
+<!-- ============== WHICH SKU ============== -->
+<h2>🛒 Which Maqueen to buy?</h2>
+<p class="section-sub">DFRobot sells three robots that look similar but differ a lot under the hood. The SKU code on the box is the most reliable indicator.</p>
+<div class="kit-grid">
+  <div class="kit" style="border-color:#4ade80;">
+    <span class="emoji">✅</span>
+    <div class="name">Maqueen Lite V4</div>
+    <div class="id" style="color:#4ade80;">ROB0148</div>
+    <div class="roles"><strong>Recommended.</strong> What this app targets. Every verb tested against this SKU. Zero surprises.</div>
+    <div class="roles" style="margin-top:8px; font-size:11px;">
+      <a href="https://www.dfrobot.com/product-2026.html" target="_blank">🛒 DFRobot store</a> ·
+      <a href="https://wiki.dfrobot.com/rob0148-en/docs/20849" target="_blank">📖 Wiki</a> ·
+      <a href="https://github.com/DFRobot/pxt-maqueen" target="_blank">🧩 Extension</a>
+    </div>
+  </div>
+  <div class="kit">
+    <span class="emoji">⚠️</span>
+    <div class="name">Maqueen Lite V5</div>
+    <div class="id">MBT0046</div>
+    <div class="roles">Newest revision. Same form factor but may have wiring changes. Expect to verify motors, line sensors, ultrasonic, servos, NeoPixel, IR before relying on it.</div>
+    <div class="roles" style="margin-top:8px; font-size:11px;">
+      <a href="https://www.dfrobot.com/product-2820.html" target="_blank">🛒 DFRobot store</a> ·
+      <a href="https://wiki.dfrobot.com/SKU_MBT0046-EN-Maqueen_Lite_V5.0" target="_blank">📖 Wiki</a> ·
+      <a href="https://github.com/DFRobot/pxt-maqueen" target="_blank">🧩 Extension</a>
+    </div>
+  </div>
+  <div class="kit">
+    <span class="emoji">❌</span>
+    <div class="name">Maqueen Plus V3</div>
+    <div class="id">MBT0050</div>
+    <div class="roles">Different beast — encoder motors, larger chassis, separate battery. Uses <code>pxt-maqueenPlusV2</code> (different extension). <strong>Will not work as-is.</strong></div>
+    <div class="roles" style="margin-top:8px; font-size:11px;">
+      <a href="https://www.dfrobot.com/product-2606.html" target="_blank">🛒 DFRobot store</a> ·
+      <a href="https://wiki.dfrobot.com/SKU_MBT0050-EN-Maqueen_Plus_V3" target="_blank">📖 Wiki</a> ·
+      <a href="https://github.com/DFRobot/pxt-maqueenPlusV2" target="_blank">🧩 Extension</a>
+    </div>
+  </div>
+</div>
+
+<!-- ============== FIRMWARE BUILD ============== -->
+<h2>🔧 Building the firmware <code>.hex</code></h2>
+<p class="section-sub">The robot needs a <code>.hex</code> file flashed to its micro:bit. Three ways to produce one — pick the simplest that fits your situation.</p>
+
+<details>
+  <summary>🌐 1. Web editor (recommended — zero install, ~2 min)</summary>
+  <div class="body">
+    <ol>
+      <li>Open <a href="https://makecode.microbit.org" target="_blank">makecode.microbit.org</a> → <strong>New Project</strong>.</li>
+      <li>Switch to <strong>JavaScript</strong> view (top-right toggle).</li>
+      <li>Paste the contents of <code>firmware/v1-maqueen-lib.ts</code>.</li>
+      <li><strong>Extensions</strong> → search <code>pxt-maqueen</code> (or paste <code>https://github.com/DFRobot/pxt-maqueen</code>) and accept the conflict prompts.</li>
+      <li>Click <strong>Download ⬇</strong> — saves <code>microbit-Maqueen-Lab.hex</code>.</li>
+      <li>Drag the <code>.hex</code> onto the micro:bit's USB drive.</li>
+    </ol>
+    <p>This is what the project ships with today. Best for occasional rebuilds.</p>
+  </div>
+</details>
+
+<details>
+  <summary>💻 2. Local CLI — <code>pxt-cli</code> (one-time setup, ~30 s per build)</summary>
+  <div class="body">
+    <pre>npm install -g pxt-cli
+mkdir maqueen-fw &amp;&amp; cd maqueen-fw
+pxt target microbit
+# drop v1-maqueen-lib.ts here, add a pxt.json (see below)
+pxt install
+pxt build      # → built/binary.hex</pre>
+    <p>The CLI reads <code>pxt.json</code> from the current directory — that's the project manifest (like <code>package.json</code> for npm). Minimal version:</p>
+    <pre>{
+  "name": "maqueen-lab-fw",
+  "version": "0.1.0",
+  "files": ["v1-maqueen-lib.ts"],
+  "dependencies": {
+    "core": "*",
+    "bluetooth": "*",
+    "microbit-bluetooth": "*",
+    "maqueen": "github:DFRobot/pxt-maqueen#v1.7.16"
+  },
+  "supportedTargets": ["microbit"]
+}</pre>
+    <p><strong>Caveat:</strong> <code>pxt-cli</code> is finicky on Node ≥ 18. Use Node 16 via <code>nvm</code> if installs fail.</p>
+  </div>
+</details>
+
+<details>
+  <summary>🤖 3. GitHub Actions CI (zero local install, ~2 min per push)</summary>
+  <div class="body">
+    <p>Add a workflow at <code>.github/workflows/firmware.yml</code> that on push (or tag) spins up Ubuntu, installs Node 16 + <code>pxt-cli</code>, runs <code>pxt build</code>, and commits the <code>.hex</code> back to the repo (or attaches it to a Release).</p>
+    <p>Hands-off after setup; right call once the firmware stabilizes.</p>
+  </div>
+</details>
+
+<details>
+  <summary>💡 Why ship a <code>.hex</code> instead of source?</summary>
+  <div class="body">
+    <ul>
+      <li><strong>One-click flash</strong> — drag the <code>.hex</code> onto the micro:bit. No MakeCode account, no extension install, ~10 s end-to-end.</li>
+      <li><strong>Version lock</strong> — pins firmware + extension versions (this project pins <code>pxt-maqueen v1.7.16</code> after hitting an IR-namespace breaking change in <code>v1.7.17</code>).</li>
+      <li><strong>Skips the extension dance</strong> — beginners don't have to find and add <code>pxt-maqueen</code>.</li>
+      <li><strong>Reproducibility</strong> — "flash <code>v0.1.38</code>, then tell me the bench numbers" is deterministic.</li>
+      <li><strong>Offline classrooms</strong> — works where MakeCode is blocked.</li>
+      <li><strong>Outdated-firmware detection</strong> — the app reads <code>HELLO:&lt;ver&gt;</code> from the running .hex and warns when stale.</li>
+    </ul>
+  </div>
+</details>
+
+<!-- ============== RESOURCES ============== -->
+<h2>🗺️ Sister pages</h2>
+<p class="section-sub">Same project, different lenses.</p>
+<div class="res-grid">
+  <a class="res" href="schematics-kids.html"><span class="res-icon">🤖</span><span class="res-text"><strong>Robot Map</strong>kid-friendly chassis</span></a>
+  <a class="res" href="schematics.html"><span class="res-icon">📐</span><span class="res-text"><strong>Engineer schematic</strong>line-by-line evidence</span></a>
+  <a class="res" href="pinout.html"><span class="res-icon">📌</span><span class="res-text"><strong>Pinout reference</strong>every pin traced</span></a>
+  <a class="res" href="lab.html"><span class="res-icon">🧪</span><span class="res-text"><strong>Component Lab</strong>servo explorer pilot</span></a>
+  <a class="res" href="plan.html"><span class="res-icon">📋</span><span class="res-text"><strong>Build plan</strong>8 phases</span></a>
+  <a class="res" href="https://github.com/abourdim/maqueen-app"><span class="res-icon">⭐</span><span class="res-text"><strong>Source on GitHub</strong>MIT licensed</span></a>
+</div>
+
+<!-- ============== HELP / FAQ ============== -->
+<h2>❓ When things go sideways</h2>
+<p class="section-sub">Click any card to expand.</p>
+
+<details>
+  <summary>🛑 "Cannot add neopixel extension" in MakeCode</summary>
+  <div class="body">
+    <p>MakeCode blocks the standard <code>neopixel</code> extension when <code>bluetooth</code> is already added (timing conflict on micro:bit). Three workarounds:</p>
+    <ul>
+      <li><strong>Skip RGB for now</strong> — comment out the NeoPixel block in the firmware. Everything else (motors, servos, sensors, LEDs, buzzer) works perfectly. RGB commands become serial-log no-ops.</li>
+      <li><strong>Try a BLE-safe fork:</strong> paste <code>https://github.com/Bohwaz/pxt-neopixel</code> in <em>Extensions → search</em>.</li>
+      <li><strong>Share your working sketch:</strong> if NeoPixels worked for you in another project, send the <code>neopixel.create(...)</code> line so the firmware can match it.</li>
+    </ul>
+  </div>
+</details>
+
+<details>
+  <summary>📡 "echo timeout" warnings in the BLE Console</summary>
+  <div class="body">
+    <p>Every command times out after <strong>500 ms</strong> if no <code>ECHO:N</code> reply arrives. Common causes:</p>
+    <ul>
+      <li>Robot not connected (check the green Connected chip)</li>
+      <li>Battery low — symptom: BLE drops mid-session</li>
+      <li>Laptop too far from the robot for the first pair (move within 1 m)</li>
+      <li>Firmware version mismatch — re-flash from the 🤖 Firmware modal</li>
+    </ul>
+  </div>
+</details>
+
+<details>
+  <summary>🚫 "UNKNOWN_VERB" reply on a command you expected to work</summary>
+  <div class="body">
+    <p>The firmware doesn't recognize the verb. You're probably running an older firmware than the app expects. Open the <strong>🤖 Firmware</strong> modal in the Connect card → <strong>Copy Code</strong> → paste into MakeCode → flash.</p>
+  </div>
+</details>
+
+<details>
+  <summary>💤 Page looks broken or stuck on an old version</summary>
+  <div class="body">
+    <p>The service worker cached old assets. Two fixes:</p>
+    <ul>
+      <li>Click <strong>🗑️ Reset</strong> in the header (clears localStorage + service worker)</li>
+      <li>Or hard-reload with <code>Ctrl+Shift+R</code></li>
+    </ul>
+  </div>
+</details>
+
+<details>
+  <summary>📜 Show me every BLE verb</summary>
+  <div class="body">
+    <p>Full reference (commands + replies + bridged bit-playground verbs):</p>
+    <pre>M:L,R           motors signed -255..255 each
+STOP            brake
+LED:i,s         simple LED i=0|1, s=0|1
+RGB:i,r,g,b     NeoPixel i=0..3 or *
+SRV:i,a         servo i=1|2, a=0..180
+BUZZ:f,ms       tone (f=0 silences)
+LINE?           reply LINE:l,r
+DIST?           reply DIST:cm  (or DIST:- when nothing detected)
+IR?             reply IR:code
+LM:HEX          5×5 LED matrix bitmap (Controls draw)
+STREAM:on|off   opt in/out of ACC/LIGHT/SOUND streams
+LOG:n           USB serial verbosity 0..3
+BENCH:PING      reply BENCH:PONG
+HELLO           reply HELLO:&lt;ver&gt;
+TEXT:msg        scrolling text on LED matrix
+CMD:icon        HEART/SMILE/SAD/FIRE/UP/DOWN/LEFT/RIGHT/CLEAR
+OTHER:*         More-tab verbs — now show feedback on the
+                micro:bit screen (digits, heart, arrows,
+                switch icons, bar graphs, scrolling text)
+SERVO1:angle    alias of SRV:1,angle
+SERVO2:angle    alias of SRV:2,angle</pre>
+    <p>Streams from the firmware (heartbeat ~500–1000 ms, off by default — flip <code>STREAM:on</code> or the chip in the live strip): <code>ACC:x,y,z</code>, <code>TEMP:°C</code>, <code>LIGHT:n</code>, <code>SOUND:n</code>, <code>BTN:A:1</code>, <code>BTN:B:1</code>. <code>input.compassHeading()</code> was removed from the auto-stream — its tilt-game calibration was blocking the BLE handler and causing the "no echo" symptom.</p>
+  </div>
+</details>
+
+<details>
+  <summary>📌 Which pin drives what?</summary>
+  <div class="body">
+    <p>Quick cheat sheet — see <a href="pinout.html">pinout.html</a> for the full evidence trail.</p>
+    <pre>P0    Buzzer (and Gravity port)
+P1    Ultrasonic TRIG (and Gravity port)
+P2    Ultrasonic ECHO (and Gravity port)
+P8    Simple LED Left
+P12   Simple LED Right
+P13   Line sensor Left
+P14   Line sensor Right
+P15   NeoPixel data (4 pixels)
+P19   I2C SCL — motor driver, servos
+P20   I2C SDA — same bus</pre>
+  </div>
+</details>
+
+<details>
+  <summary>🛠️ I want to extend it (developer notes)</summary>
+  <div class="body">
+    <p><strong>File layout:</strong></p>
+    <pre>index.html             main app
+firmware/v1-...ts      Maqueen firmware
+js/ble.js              UART layer — DO NOT EDIT
+js/ble-scheduler.js    seq + echo wrapper
+js/maqueen-panel.js    live sensor strip
+js/maqueen-tab.js      Maqueen tab controls
+tools/bump-firmware.py auto-bump version + re-embed</pre>
+    <p><strong>Add a new firmware verb:</strong></p>
+    <ol>
+      <li>Add a branch in the dispatch <code>if/else</code> in <code>firmware/v1-maqueen-lib.ts</code>.</li>
+      <li>Run <code>python tools/bump-firmware.py</code> (bumps patch version + re-embeds the blob in <code>index.html</code>).</li>
+      <li>Add UI in <code>js/maqueen-tab.js</code>, send via <code>window.bleScheduler.send('VERB:args')</code>.</li>
+      <li>If it's a query, parse the reply in <code>js/maqueen-panel.js</code>'s <code>onReply</code>.</li>
+    </ol>
+    <p><strong>Architecture rule:</strong> never modify <code>js/ble.js</code>. Wrap, never replace.</p>
+  </div>
+</details>
+
+<footer class="guide-footer">
+  <a href="index.html">← back to Maqueen Lab</a>
+  <a href="schematics-kids.html">Robot Map</a>
+  <a href="schematics.html">Schematic</a>
+  <a href="pinout.html">Pinout</a>
+  <a href="plan.html">Plan</a>
+  <a href="https://github.com/abourdim/maqueen-app">GitHub</a>
+  <div style="margin-top: 12px; opacity: 0.6;">v0.1.55 · MIT · forked from <a href="https://github.com/abourdim/bit-playground">bit-playground</a></div>
+</footer>
+
+</body>
+</html>
